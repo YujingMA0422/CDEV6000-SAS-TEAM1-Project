@@ -929,6 +929,228 @@ html, [data-testid="stMain"], [data-testid="stAppViewContainer"] {{ scroll-behav
 .cmp2 .st.bad {{ background:#FCE9E4; color:#B5452E; }}
 .cmp2 .m {{ display:flex; justify-content:space-between; gap:8px; font-size:.9rem; padding:4px 0; border-top:1px solid #F0F3F6; }}
 .cmp2 .m span {{ color:#55677A; }} .cmp2 .m b {{ color:{NAVY}; font-weight:680; }}
+/* ---- v5.1 Results ---- */
+[id="operations"], [id="flow-impact"] {{ scroll-margin-top:24px; }}
+.stApp:has(#operations:target) .secnav a[href="#operations"],
+.stApp:has(#flow-impact:target) .secnav a[href="#flow-impact"],
+.stApp:has(#compare-options:target) .secnav a[href="#compare-options"] {{ color:{TEAL_DARK} !important; border-left-color:{TEAL}; font-weight:720; }}
+.ic {{ display:inline-flex; width:1.15em; height:1.15em; vertical-align:-0.2em; }} .ic svg {{ width:100%; height:100%; }}
+.rgen {{ font-size:.9rem; font-weight:600; color:{TEAL_DARK}; margin-bottom:.2rem; }}
+.stale2 {{ display:flex; gap:10px; align-items:flex-start; background:#FFF6E5; color:#6B4A00; border-radius:12px;
+  padding:10px 14px; font-size:.95rem; margin:0 0 .8rem; }} .stale2 .ic {{ color:#B07800; margin-top:2px; }}
+.rq {{ font-size:1.32rem; font-weight:720; color:{NAVY}; line-height:1.35; letter-spacing:-0.01em; margin:.15rem 0 .8rem; max-width:46em; }}
+.rset {{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:2px 28px; margin:0 0 .5rem; }}
+.rset > div {{ display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid #EEF2F6; font-size:.97rem; }}
+.rset span {{ color:#55677A; }} .rset b {{ color:{NAVY}; font-weight:650; text-align:right; }}
+@media (max-width: 760px) {{ .rset {{ grid-template-columns:1fr; }} }}
+.rbase {{ background:{PANEL}; border-radius:12px; padding:10px 14px; font-size:.95rem; color:#34475A; margin:.6rem 0 .9rem; line-height:1.5; }}
+.rbase b {{ color:{NAVY}; }}
+.st-key-resactions {{ margin:.2rem 0 .4rem; }}
+.simdet p {{ font-size:.92rem; color:#34475A; line-height:1.55; margin:0 0 .45rem; }}
+.rguide {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0; margin:.4rem 0 1.4rem;
+  border-top:1px solid #E3EAF0; border-bottom:1px solid #E3EAF0; }}
+.rguide a {{ display:block; padding:12px 16px 12px 0; text-decoration:none !important; border-left:none; }}
+.rguide a + a {{ padding-left:16px; border-left:1px solid #E3EAF0; }}
+.rguide b {{ display:block; color:{NAVY}; font-size:.98rem; font-weight:700; }}
+.rguide span {{ display:block; color:#55677A; font-size:.9rem; margin-top:2px; }}
+.rguide a:hover b {{ color:{TEAL_DARK}; }}
+.fq {{ font-size:1rem; font-weight:650; color:#46586A; margin:.3rem 0 .35rem; }}
+.ans {{ display:flex; gap:14px; align-items:flex-start; background:#fff; border:1px solid #E6EBF1; border-radius:16px;
+  padding:16px 20px; margin:0 0 1rem; }}
+.ans > .ic {{ width:30px; height:30px; flex:0 0 auto; margin-top:2px; }}
+.ans.ok > .ic {{ color:{TEAL}; }} .ans.warn > .ic {{ color:#C2552F; }} .ans.mixed > .ic {{ color:#8A6D1F; }} .ans.imp > .ic {{ color:{TEAL_DARK}; }}
+.ans .ah {{ font-size:1.28rem; font-weight:740; color:{NAVY}; line-height:1.35; letter-spacing:-0.01em; }}
+.ans .ah2 {{ font-size:1.08rem; font-weight:680; color:{NAVY}; line-height:1.45; }}
+.ans .as2 {{ font-size:1rem; color:#3E5164; margin-top:.35rem; line-height:1.55; }}
+.ans .seemore {{ display:inline-block; margin-top:.4rem; font-size:.92rem; font-weight:650; color:{TEAL_DARK} !important; }}
+.kgrid {{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin:.2rem 0 .6rem; }}
+@media (max-width: 980px) {{ .kgrid {{ grid-template-columns:1fr; }} }}
+.kg {{ background:#fff; border:1px solid #E6EBF1; border-radius:18px; padding:16px 20px 14px; min-width:0; }}
+.kgh {{ display:flex; gap:8px; align-items:center; font-size:1rem; font-weight:720; color:{TEAL_DARK}; margin-bottom:.6rem; }}
+.kp {{ padding-bottom:12px; border-bottom:1px solid #EEF2F6; margin-bottom:12px; }}
+.kt {{ font-size:1rem; font-weight:680; color:{NAVY}; margin-bottom:6px; }}
+.ks2 .kt {{ font-size:.96rem; }}
+.kn {{ font-size:.9rem; color:#55677A; margin:6px 0 4px; line-height:1.45; }}
+.ksub {{ font-size:.86rem; font-weight:650; color:#55677A; margin:8px 0 2px; }}
+.cmpv {{ display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; margin:2px 0 6px; }}
+.cmpv .lb, .cmpv .ls {{ font-size:.86rem; color:#66778A; font-weight:600; }}
+.cmpv b {{ font-size:1.35rem; font-weight:720; color:#5B6B7A; letter-spacing:-0.01em; }}
+.kp .cmpv b {{ font-size:1.65rem; }}
+.cmpv .sv {{ color:{NAVY} !important; }} .cmpv .ar {{ color:#9FB0C0; font-size:1.1rem; }}
+.chg2 {{ display:inline-block; border-radius:999px; padding:2px 11px; font-weight:650; font-size:.88rem; margin:2px 0 2px; }}
+.chg2.good {{ background:#E0F2EE; color:{TEAL_DARK}; }} .chg2.bad {{ background:#FCE9E4; color:#A9412B; }}
+.chg2.neutral {{ background:#E8EEF5; color:{NAVY_2}; }} .chg2.flat {{ background:#EEF1F4; color:#56677A; font-weight:600; cursor:help; }}
+.capbar {{ margin:6px 0 8px; }}
+.cbr {{ display:grid; grid-template-columns:132px 1fr 64px; gap:10px; align-items:center; font-size:.88rem; color:#46586A; margin:4px 0; }}
+.cbr b {{ color:{NAVY}; text-align:right; font-weight:680; }}
+.cbr .trk {{ height:10px; background:#EEF2F6; border-radius:6px; overflow:hidden; }}
+.cbr .trk i {{ display:block; height:100%; border-radius:6px; }}
+.cbr .trk i.d {{ background:{TEAL}; }} .cbr .trk i.d.over {{ background:#D9785A; }} .cbr .trk i.c {{ background:{NAVY}; opacity:.75; }}
+.dins {{ margin:1rem 0 .5rem; padding:18px 22px 6px; background:linear-gradient(120deg, #FFFFFF, #F2F8F7); border:1px solid #DDE9E6; border-radius:18px; }}
+.dins .dt {{ font-size:1.22rem; font-weight:750; color:{NAVY}; letter-spacing:-0.01em; margin-bottom:.4rem; }}
+.dins .di {{ display:flex; gap:14px; padding:12px 0; border-top:1px solid #E3ECEA; }}
+.dins .di:first-of-type {{ border-top:none; }}
+.dins .di > .ic {{ width:24px; height:24px; color:{TEAL_DARK}; flex:0 0 auto; margin-top:3px; }}
+.dins .dh {{ font-size:1.06rem; font-weight:720; color:{NAVY}; margin-bottom:3px; }}
+.dins p {{ font-size:.98rem; color:#34475A; margin:0 0 4px; line-height:1.55; }}
+.dins p.dn {{ color:{TEAL_DARK}; font-weight:600; font-size:.94rem; }}
+.tq {{ font-size:1.08rem; font-weight:720; color:{NAVY}; margin:.6rem 0 .2rem; }}
+.ta {{ font-size:.97rem; color:#34475A; margin:0 0 .6rem; line-height:1.55; max-width:52em; }}
+.bdnote {{ font-size:.93rem; color:#34475A; background:{PANEL}; border-radius:12px; padding:12px 16px; margin:.5rem 0 .8rem; line-height:1.55; }}
+.bdnote b {{ color:{NAVY}; }}
+.cmpempty {{ font-size:.97rem; color:#46586A; background:{PANEL}; border-radius:12px; padding:14px 16px; margin:.6rem 0; }}
+.mwrap {{ overflow-x:auto; margin:.6rem 0 .3rem; border:1px solid #E6EBF1; border-radius:16px; background:#fff; }}
+.cmpmx {{ border-collapse:collapse; width:100%; min-width:560px; font-size:.94rem; }}
+.cmpmx th, .cmpmx td {{ padding:9px 14px; text-align:left; vertical-align:top; border-top:1px solid #EEF2F6; }}
+.cmpmx thead th {{ border-top:none; background:#FAFBFC; vertical-align:bottom; }}
+.cmpmx tbody th {{ color:#46586A; font-weight:600; width:24%; }}
+.cmpmx td b {{ color:{NAVY}; font-weight:680; }}
+.cmpmx .mo {{ font-weight:740; color:{NAVY}; font-size:1.02rem; }}
+.cmpmx .mq {{ font-weight:400; color:#46586A; font-size:.85rem; line-height:1.4; margin-top:3px; }}
+.cmpmx .mt {{ font-weight:400; color:#7A8A9A; font-size:.78rem; margin-top:3px; }}
+.cmpmx tr.grp th {{ background:{PANEL}; color:{TEAL_DARK}; font-size:.86rem; font-weight:700; padding:7px 14px; }}
+.cmpmx .mdiff {{ font-size:.82rem; margin-top:2px; color:#56677A; }}
+.cmpmx .mdiff.good {{ color:{TEAL_DARK}; }} .cmpmx .mdiff.bad {{ color:#A9412B; }}
+.cmpmx .st {{ display:inline-block; font-size:.8rem; font-weight:700; border-radius:999px; padding:2px 9px; }}
+.cmpmx .st.good {{ background:#E0F2EE; color:{TEAL_DARK}; }} .cmpmx .st.warn {{ background:#FFF3DC; color:#8A5A00; }}
+.cmpmx .st.bad {{ background:#FCE9E4; color:#A9412B; }}
+.explore2 {{ margin:2.2rem 0 .5rem; padding-top:1.4rem; border-top:1px solid #E3EAF0; }}
+.explore2 .et {{ font-size:1.3rem; font-weight:740; color:{NAVY}; letter-spacing:-0.01em; }}
+.explore2 p {{ font-size:.98rem; color:#46586A; margin:.3rem 0 .6rem; max-width:48em; }}
+/* ---- v5.2 Results: overview + tabs ---- */
+.st-key-reshead {{ margin-bottom:.4rem; flex-wrap:wrap; gap:12px; }}
+.st-key-reshead .ovhead {{ margin-bottom:0 !important; }}
+.stale2 span {{ flex:1; }}
+.scols {{ display:grid; grid-template-columns:1.15fr 1fr; gap:14px; margin:.2rem 0 .8rem; }}
+@media (max-width: 860px) {{ .scols {{ grid-template-columns:1fr; }} }}
+.scol {{ background:#fff; border:1px solid #E6EBF1; border-radius:16px; padding:14px 18px 6px; }}
+.sch {{ font-size:.95rem; font-weight:720; color:{TEAL_DARK}; margin-bottom:.4rem; }}
+.sg {{ padding:8px 0; border-top:1px solid #EEF2F6; }} .sch + .sg {{ border-top:none; }}
+.sl {{ font-size:.84rem; font-weight:650; color:#66778A; }}
+.sv1 {{ font-size:1.05rem; font-weight:680; color:{NAVY}; margin-top:2px; }}
+.sv2 {{ font-size:.9rem; color:#55677A; margin-top:1px; line-height:1.45; }}
+.snone {{ font-size:.97rem; color:#55677A; padding:6px 0 10px; }}
+.rbh {{ font-size:.92rem; font-weight:720; color:{TEAL_DARK}; margin-bottom:3px; }}
+.evid {{ display:flex; flex-wrap:wrap; gap:10px 32px; margin:.7rem 0 .2rem; }}
+.evid div {{ display:flex; flex-direction:column; min-width:150px; }}
+.evid b {{ font-size:1.9rem; font-weight:770; color:{NAVY}; letter-spacing:-0.02em; line-height:1.1; }}
+.evid span {{ font-size:.9rem; color:#46586A; margin-top:3px; max-width:15em; line-height:1.35; }}
+.dins .dh span, .dins .dl {{ display:block; font-size:.76rem; font-weight:700; color:#7A8A9A; letter-spacing:.01em; margin-bottom:1px; }}
+.dins p {{ margin:4px 0 4px; }}
+.xh {{ font-size:1.45rem; font-weight:760; color:{NAVY}; letter-spacing:-0.015em; margin:2.2rem 0 .1rem; padding-top:1.4rem;
+  border-top:1px solid #E3EAF0; }}
+.xs {{ font-size:1rem; color:#46586A; margin:0 0 .4rem; }}
+.st-key-maintabs [data-baseweb="tab-list"] {{ gap:6px; overflow-x:auto; scrollbar-width:thin; border-bottom:1px solid #DCE4EC; }}
+.st-key-maintabs [data-baseweb="tab-list"] > button[role="tab"] {{ padding:10px 18px !important; height:auto; }}
+.st-key-maintabs [data-baseweb="tab-list"] > button[role="tab"] p {{ font-size:1.08rem !important; font-weight:700 !important; white-space:nowrap; }}
+.st-key-maintabs [data-baseweb="tab-list"] > button[aria-selected="true"] p {{ color:{NAVY} !important; }}
+.st-key-maintabs [data-baseweb="tab-highlight"] {{ background-color:{TEAL} !important; height:3px; }}
+.st-key-trendnav {{ margin:.2rem 0 .6rem; }}
+.st-key-trendnav [data-testid="stButtonGroup"] {{ overflow-x:auto; }}
+.st-key-trendnav button p {{ font-size:.92rem !important; }}
+.tq {{ font-size:1.12rem; font-weight:720; color:{NAVY}; margin:.8rem 0 .4rem; }}
+.tq2 {{ font-size:1.02rem; font-weight:700; color:{NAVY}; margin:.9rem 0 .25rem; }}
+details.why {{ margin:.2rem 0 .5rem; font-size:.92rem; color:#34475A; }}
+details.why summary {{ cursor:pointer; color:{TEAL_DARK}; font-weight:650; list-style:none; display:inline-flex; gap:6px; align-items:center; }}
+details.why summary::-webkit-details-marker {{ display:none; }}
+details.why summary::before {{ content:"i"; display:inline-flex; width:16px; height:16px; border-radius:50%; border:1.5px solid {TEAL};
+  font-size:.7rem; font-weight:800; align-items:center; justify-content:center; font-family:Georgia, serif; }}
+details.why p {{ margin:.35rem 0 0 22px; line-height:1.55; max-width:52em; }}
+.wyt {{ background:#fff; border:1px solid #E6EBF1; border-radius:14px; padding:12px 18px; margin:.2rem 0 .8rem; }}
+.wyh, .wyh2 {{ font-size:.95rem; font-weight:720; color:{TEAL_DARK}; }}
+.wyh2 {{ margin:.6rem 0 .1rem; }}
+.wyg {{ font-size:1.05rem; font-weight:700; color:{NAVY}; margin:.2rem 0 .1rem; }}
+.wyt ul {{ margin:.2rem 0 .2rem 1.1rem; padding:0; }} .wyt li {{ font-size:.95rem; color:#34475A; margin:.15rem 0; }}
+.cmpstart {{ background:linear-gradient(120deg, #FFFFFF, #F2F8F7); border:1px solid #DDE9E6; border-radius:16px; padding:16px 20px; margin:.2rem 0 .7rem; }}
+.cmpstart .ch {{ font-size:1.15rem; font-weight:740; color:{NAVY}; }}
+.cmpstart p {{ font-size:.97rem; color:#34475A; margin:.3rem 0 .2rem; }}
+.cmpstart .steps {{ display:flex; flex-wrap:wrap; gap:6px 0; margin:.5rem 0 .1rem; padding:0; list-style:none; counter-reset:st; }}
+.cmpstart .steps li {{ counter-increment:st; font-size:.88rem; font-weight:650; color:{TEAL_DARK}; }}
+.cmpstart .steps li::before {{ content:counter(st); display:inline-flex; width:20px; height:20px; border-radius:50%; background:{TEAL_LIGHT};
+  align-items:center; justify-content:center; font-size:.75rem; margin-right:6px; }}
+.cmpstart .steps li + li::before {{ margin-left:14px; }}
+.st-key-cmpactions {{ margin:.2rem 0 .6rem; }}
+.cmpmx tr.same td {{ color:#7A8A9A; }}
+/* ---- v5.3 Results: interactive tabs + connected overview ---- */
+.st-key-restabs {{ position:sticky; top:0; z-index:20; background:rgba(245,247,250,.92); backdrop-filter:blur(8px);
+  padding:8px 6px; margin:.6rem 0 1rem; border-radius:16px; border:1px solid #E3EAF0; flex-wrap:nowrap; overflow-x:auto; }}
+.st-key-restabs button {{ border-radius:12px !important; min-height:2.6rem; padding:0 18px !important;
+  transition:background-color .18s ease, color .18s ease; white-space:nowrap; }}
+.st-key-restabs button p {{ font-size:1rem !important; font-weight:680 !important; white-space:nowrap; }}
+.st-key-restabs [data-testid="stBaseButton-primary"] {{ background:{NAVY} !important; color:#fff !important; border:none !important;
+  box-shadow:0 4px 12px -6px rgba(11,37,69,.6); }}
+.st-key-restabs [data-testid="stBaseButton-tertiary"] {{ color:#46586A !important; }}
+.st-key-restabs [data-testid="stBaseButton-tertiary"]:hover {{ background:#E8EEF5 !important; color:{NAVY} !important; }}
+@media (max-width: 640px) {{ .st-key-restabs button {{ padding:0 12px !important; }} .st-key-restabs button p {{ font-size:.92rem !important; }} }}
+.st-key-ovintro {{ margin:0 0 .6rem; flex-wrap:wrap; gap:10px; }}
+.ovt .ovh {{ font-size:1.5rem; font-weight:760; color:{NAVY}; letter-spacing:-0.015em; }}
+.ovt p {{ font-size:1rem; color:#46586A; margin:.15rem 0 0; }}
+[class*="st-key-stg_"] {{ position:relative; padding:0 0 1.4rem 30px; border-left:2px solid #D6E7E3; margin-left:9px; gap:.4rem; }}
+[class*="st-key-stg_"]::before {{ content:""; position:absolute; left:-8px; top:2px; width:14px; height:14px; border-radius:50%;
+  background:#fff; border:3px solid {TEAL}; }}
+.st-key-stg_d {{ border-left-color:transparent; }}
+.stg {{ font-size:.82rem; font-weight:720; color:{TEAL_DARK}; letter-spacing:.02em; margin:-1px 0 .35rem; }}
+.rbase {{ margin-top:.2rem; }}
+.kv {{ display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-top:1px solid #EEF2F6; font-size:.95rem; }}
+.sch + .kv {{ border-top:none; }} .kv span {{ color:#55677A; }} .kv b {{ color:{NAVY}; font-weight:650; text-align:right; }}
+.hero2 {{ border-radius:20px; padding:20px 24px 16px; background:#fff; border:1px solid #E6EBF1; }}
+.hero2.warn {{ background:linear-gradient(120deg, #FFFFFF 0%, #FDF3EF 100%); border-color:#F2D9CF; }}
+.hero2.ok {{ background:linear-gradient(120deg, #FFFFFF 0%, #EEF7F5 100%); border-color:#D6E9E5; }}
+.hero2.mixed {{ background:linear-gradient(120deg, #FFFFFF 0%, #FBF6EA 100%); border-color:#EEE3C8; }}
+.hero2 .hh {{ display:flex; gap:12px; align-items:flex-start; font-size:1.42rem; font-weight:760; color:{NAVY}; line-height:1.3;
+  letter-spacing:-0.012em; }}
+.hero2 .hh .ic {{ width:30px; height:30px; flex:0 0 auto; margin-top:1px; }}
+.hero2.warn .hh .ic {{ color:#C2552F; }} .hero2.ok .hh .ic {{ color:{TEAL}; }} .hero2.mixed .hh .ic {{ color:#8A6D1F; }}
+.hero2 .evid {{ margin:.9rem 0 .2rem 42px; }}
+.hero2 .hc {{ margin:.5rem 0 0 42px; font-size:.97rem; color:#3E5164; line-height:1.5; }}
+.st-key-ansacts {{ margin-left:42px; }}
+.eband {{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0; background:#fff; border:1px solid #E6EBF1;
+  border-radius:18px; overflow:hidden; }}
+@media (max-width: 980px) {{ .eband {{ grid-template-columns:1fr; }} }}
+.ecol {{ padding:16px 20px 12px; min-width:0; }} .ecol + .ecol {{ border-left:1px solid #EEF2F6; }}
+@media (max-width: 980px) {{ .ecol + .ecol {{ border-left:none; border-top:1px solid #EEF2F6; }} }}
+.eh {{ display:flex; gap:8px; align-items:center; font-size:1.02rem; font-weight:720; color:{TEAL_DARK}; margin-bottom:.4rem; }}
+.cmpr {{ padding:8px 0 10px; border-bottom:1px solid #F0F3F6; }} .cmpr:last-child {{ border-bottom:none; }}
+.cl {{ font-size:.95rem; font-weight:680; color:{NAVY}; margin-bottom:6px; }}
+.bp {{ display:grid; grid-template-columns:96px minmax(60px,1fr) minmax(92px,max-content); gap:10px; align-items:center; margin:3px 0; }}
+.bn {{ font-size:.84rem; color:#55677A; font-weight:600; }}
+.bt {{ position:relative; height:12px; background:#EEF2F6; border-radius:7px; }}
+.bt i {{ display:block; height:100%; border-radius:7px; }} .bt i.b0 {{ background:{BASE}; }} .bt i.b1 {{ background:{TEAL}; }}
+.bt .cap {{ position:absolute; top:-4px; bottom:-4px; width:3px; background:{NAVY}; border-radius:2px; transform:translateX(-1px); }}
+.bp b {{ font-size:1.06rem; font-weight:740; color:{NAVY}; text-align:right; white-space:nowrap; }}
+.cd {{ margin-top:4px; }} .cnote {{ font-size:.86rem; color:#55677A; margin-top:4px; line-height:1.45; }}
+.wq {{ font-size:.92rem; font-weight:720; color:#34475A; margin:.3rem 0 .1rem; }}
+.wmini {{ display:grid; grid-template-columns:auto auto; justify-content:space-between; gap:3px 12px; font-size:.9rem; padding:4px 0 8px; }}
+.wmini span {{ color:#55677A; }} .wmini b {{ color:{NAVY}; font-weight:680; text-align:right; }}
+.imphl {{ display:flex; gap:12px; align-items:flex-start; margin:.8rem 0 0; padding:12px 16px; border-radius:14px; background:{PANEL}; }}
+.imphl .ic {{ width:22px; height:22px; color:{TEAL_DARK}; flex:0 0 auto; margin-top:2px; }}
+.ih1 {{ font-size:.82rem; font-weight:720; color:{TEAL_DARK}; }} .ih2 {{ font-size:1rem; color:{NAVY}; font-weight:620; line-height:1.45; }}
+.dt2 {{ font-size:1.25rem; font-weight:760; color:{NAVY}; margin:0 0 .3rem; letter-spacing:-0.01em; }}
+[class*="st-key-ins_row_"] {{ background:#fff; border:1px solid #E6EBF1; border-radius:16px; padding:12px 16px 4px; gap:0; }}
+.di2 {{ display:flex; gap:12px; }} .di2 > .ic {{ width:24px; height:24px; color:{TEAL_DARK}; flex:0 0 auto; margin-top:2px; }}
+.di2 .f {{ font-size:1.06rem; font-weight:720; color:{NAVY}; margin-bottom:4px; }}
+.di2 .w {{ font-size:.95rem; color:#34475A; margin:2px 0; line-height:1.5; }}
+.di2 .w span {{ font-weight:700; color:#66778A; margin-right:6px; font-size:.84rem; }}
+[class*="st-key-ins_row_"] [data-testid="stButton"] {{ margin-left:36px; }}
+.mstrip {{ display:flex; flex-wrap:wrap; gap:6px 20px; font-size:.88rem; color:#46586A; margin:.2rem 0 .3rem; }}
+.mstrip b {{ color:{NAVY}; margin-left:4px; }}
+.mstrip .k {{ display:inline-block; width:22px; height:0; vertical-align:middle; margin-right:6px; }}
+.mstrip .k.dot {{ border-top:2px dotted {TEAL_DARK}; }} .mstrip .k.dotb {{ border-top:2px dotted {BASE}; }}
+.mstrip .k.dash {{ border-top:2px dashed #D9785A; }}
+.tq3 {{ font-size:.95rem; font-weight:720; color:#34475A; margin:.6rem 0 .2rem; }}
+.st-key-trendnav [data-testid="stButtonGroup"] button[aria-checked="true"], .st-key-trendnav [data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {{
+  background:{TEAL_LIGHT} !important; color:{TEAL_DARK} !important; border-color:{TEAL} !important; }}
+.st-key-exback {{ margin:.8rem 0 .4rem; }}
+.prog {{ display:flex; flex-wrap:wrap; gap:6px; list-style:none; padding:0; margin:.3rem 0 .2rem; counter-reset:p; }}
+.prog li {{ counter-increment:p; font-size:.88rem; font-weight:650; color:#66778A; background:#EEF2F6; border-radius:999px; padding:4px 12px 4px 6px; }}
+.prog li::before {{ content:counter(p); display:inline-flex; width:20px; height:20px; border-radius:50%; background:#fff; color:#66778A;
+  align-items:center; justify-content:center; font-size:.75rem; margin-right:6px; }}
+.prog li.done {{ background:{TEAL_LIGHT}; color:{TEAL_DARK}; }} .prog li.done::before {{ content:"✓"; color:{TEAL_DARK}; }}
+.prog li.now {{ background:{NAVY}; color:#fff; }} .prog li.now::before {{ color:{NAVY}; }}
+.curplan {{ display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; background:#fff; border:1px solid #E6EBF1; border-radius:14px;
+  padding:10px 16px; margin:.4rem 0 .6rem; }}
+.curplan span {{ font-size:.82rem; font-weight:700; color:{TEAL_DARK}; }} .curplan b {{ color:{NAVY}; font-size:.98rem; }}
+.curplan em {{ font-style:normal; font-size:.85rem; color:#66778A; }}
 /* Fallback so primary buttons keep the navy brand colour even if .streamlit/config.toml is not deployed
    (Streamlit's default theme colour is red). Keyed overrides above (hero, navigation) still take precedence. */
 button[data-testid="stBaseButton-primary"] {{ background-color:{NAVY}; border-color:{NAVY}; color:#fff; }}
@@ -957,8 +1179,120 @@ button[data-testid="stBaseButton-primary"]:focus:not(:active) {{ border-color:{N
 """
 
 
+# v5.4 shared design layer: global navigation, page rhythm, controls and motion. Loaded after CSS so it wins.
+NAV_H, NAV_H_C, NAV_TOP, NAV_TOP_C = 72, 56, 12, 8
+STICKY_BELOW_NAV = NAV_TOP_C + NAV_H_C + 12          # where page-level sticky bars sit under the compact header
+DESIGN_CSS = f"""
+<style>
+/* ---- tokens ---- */
+.stApp {{ --hcp-navy:{NAVY}; --hcp-teal:{TEAL}; --hcp-teal-d:{TEAL_DARK}; --hcp-ink:{INK}; --hcp-muted:#4E6072;
+  --hcp-line:#E3E9EF; --hcp-ease:cubic-bezier(.2,.7,.2,1); --hcp-nav:{STICKY_BELOW_NAV}px;
+  background:radial-gradient(1100px 420px at 88% -140px, rgba(14,138,126,.10), rgba(14,138,126,0) 70%),
+             radial-gradient(900px 360px at -5% -180px, rgba(11,37,69,.07), rgba(11,37,69,0) 70%), {CANVAS}; }}
+
+/* ---- global navigation: fixed, truly centred, compact after scrolling ---- */
+[data-testid="stHeader"] {{ pointer-events:none; }}
+[data-testid="stHeader"] [data-testid="stToolbar"], [data-testid="stHeader"] [data-testid="stToolbar"] *,
+[data-testid="stStatusWidget"], [data-testid="stStatusWidget"] * {{ pointer-events:auto; }}
+.block-container {{ padding-top:{NAV_TOP + NAV_H + 30}px !important; }}
+.st-key-topnav {{ position:fixed !important; z-index:100; top:{NAV_TOP}px; left:3rem; right:3rem; height:{NAV_H}px;
+  box-sizing:border-box; margin:0 !important; display:grid !important;
+  grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr); align-items:center; column-gap:16px;
+  padding:0 16px !important; background:rgba(255,255,255,.80); -webkit-backdrop-filter:saturate(1.6) blur(14px);
+  backdrop-filter:saturate(1.6) blur(14px); border:1px solid rgba(11,37,69,.08) !important; border-radius:18px;
+  box-shadow:0 1px 2px rgba(11,37,69,.04), 0 10px 28px -20px rgba(11,37,69,.22);
+  transition:top .28s var(--hcp-ease), height .28s var(--hcp-ease), border-radius .28s var(--hcp-ease),
+             box-shadow .28s var(--hcp-ease), background-color .28s var(--hcp-ease); }}
+.st-key-topnav > * {{ min-width:0; width:auto !important; flex:none !important; }}
+.st-key-topnav > :nth-child(1) {{ justify-self:start; }}
+.st-key-topnav > :nth-child(2) {{ justify-self:center; }}
+.st-key-topnav > :nth-child(3) {{ justify-self:end; }}
+.st-key-navlinks {{ gap:10px !important; padding:0 !important; }}
+.st-key-navlinks button {{ position:relative; min-height:2.45rem !important; padding:0 17px !important;
+  transition:background-color .2s ease, color .2s ease, min-height .28s var(--hcp-ease) !important; }}
+.st-key-navlinks button::after {{ content:""; position:absolute; left:50%; bottom:4px; width:0; height:2px; border-radius:2px;
+  background:{TEAL}; transform:translateX(-50%); transition:width .25s var(--hcp-ease); }}
+.st-key-navlinks [data-testid="stBaseButton-primary"], .st-key-navlinks button[kind="primary"] {{
+  background:rgba(11,37,69,.06) !important; color:{NAVY} !important; }}
+.st-key-navlinks [data-testid="stBaseButton-primary"]::after, .st-key-navlinks button[kind="primary"]::after {{ width:18px; }}
+.brand2 {{ display:flex; align-items:center; gap:10px; }}
+.brand2 .bmark {{ transition:width .28s var(--hcp-ease), height .28s var(--hcp-ease); }}
+.brand2 .bsub {{ max-height:1.3em; overflow:hidden; transition:opacity .2s ease, max-height .28s var(--hcp-ease), margin .28s var(--hcp-ease); }}
+body[data-hcp-nav="compact"] .st-key-topnav {{ top:{NAV_TOP_C}px; height:{NAV_H_C}px; border-radius:14px;
+  background:rgba(255,255,255,.90); box-shadow:0 1px 2px rgba(11,37,69,.05), 0 14px 32px -20px rgba(11,37,69,.38); }}
+body[data-hcp-nav="compact"] .brand2 .bsub {{ opacity:0; max-height:0; margin-top:0; }}
+body[data-hcp-nav="compact"] .brand2 .bmark {{ width:26px; height:26px; }}
+body[data-hcp-nav="compact"] .st-key-navlinks button {{ min-height:2.2rem !important; }}
+.st-key-nav_menu {{ display:none !important; }}
+.st-key-nav_menu button {{ border-radius:999px !important; border:1px solid #E3E8EE !important; min-height:2.2rem; }}
+[data-testid="stPopoverBody"] [class*="st-key-navm_"] button {{ justify-content:flex-start; border-radius:10px !important; }}
+@media (max-width: 1099px) {{
+  .st-key-topnav {{ grid-template-columns:minmax(0, 1fr) auto; }}
+  .st-key-topnav > :has(.st-key-navlinks), .st-key-navlinks {{ display:none !important; }}
+  .st-key-nav_menu {{ display:flex !important; }} }}
+@media (max-width: 760px) {{
+  .st-key-topnav {{ left:1rem; right:1rem; padding-left:14px !important; }}
+  .block-container {{ padding-top:{NAV_TOP + NAV_H_C + 24}px !important; }}
+  .st-key-topnav, body[data-hcp-nav="compact"] .st-key-topnav {{ height:{NAV_H_C}px; }}
+  .brand2 .bname {{ font-size:1rem !important; }} }}
+
+/* ---- page-level sticky elements sit below the header, never under it ---- */
+.st-key-restabs {{ top:var(--hcp-nav) !important; z-index:20 !important; }}
+[data-testid="stLayoutWrapper"]:has(> .st-key-restabs) {{ position:sticky; top:var(--hcp-nav); z-index:20; }}
+.st-key-summary {{ top:calc(var(--hcp-nav) + 4px) !important; }}
+@media (min-width: 1100px) {{ .st-key-summary {{ max-height:calc(100vh - var(--hcp-nav) - 24px) !important; }} }}
+@media (min-width: 1280px) {{ .secnav {{ top:{NAV_TOP + NAV_H + 34}px !important; }} }}
+.stApp [id] {{ scroll-margin-top:calc(var(--hcp-nav) + 24px); }}
+/* zero-height helper frames (scrolling, header behaviour) take no space */
+[data-testid="stElementContainer"]:has(> iframe[height="0"]), .stElementContainer:has(> iframe[height="0"]),
+[data-testid="stElementContainer"]:has(iframe[data-testid="stIFrame"][height="0"]) {{ position:absolute !important;
+  width:0 !important; height:0 !important; overflow:hidden !important; }}
+
+/* ---- typography: one hierarchy across pages ---- */
+.ovhead h1, .ptitle h1 {{ font-size:clamp(2.1rem, 3.1vw, 2.7rem) !important; font-weight:760 !important;
+  letter-spacing:-0.032em !important; line-height:1.08 !important; color:{NAVY} !important; }}
+.ovhead p, .ptitle p {{ color:var(--hcp-muted); font-size:1.08rem; line-height:1.55; max-width:44em; }}
+.qh h2, .stph h2, .sect h2 {{ letter-spacing:-0.022em !important; }}
+.tq2, .xh, .dt2, .ovh {{ letter-spacing:-0.02em; }}
+.rnote, .cnote, .qsub {{ color:var(--hcp-muted); }}
+
+/* ---- controls: shared states ---- */
+.stApp button {{ transition:background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .2s ease,
+  transform .2s var(--hcp-ease); }}
+.stApp [data-testid="stBaseButton-secondary"] {{ border-color:#D6DEE7 !important; }}
+.stApp [data-testid="stBaseButton-secondary"]:hover {{ border-color:{TEAL} !important; color:{TEAL_DARK} !important;
+  background:#F3FAF8 !important; }}
+.block-container [data-testid="stBaseButton-primary"]:hover {{
+  box-shadow:0 8px 18px -10px rgba(11,37,69,.55); }}
+.stApp [data-testid="stBaseButton-tertiary"]:hover p {{ text-decoration:underline; text-underline-offset:3px;
+  text-decoration-thickness:1px; }}
+.st-key-topnav [data-testid="stBaseButton-tertiary"]:hover p, .st-key-restabs [data-testid="stBaseButton-tertiary"]:hover p,
+.st-key-wl_cta [data-testid="stBaseButton-tertiary"]:hover p, [data-testid="stPopoverBody"] [data-testid="stBaseButton-tertiary"]:hover p {{
+  text-decoration:none; }}
+.stApp button:focus-visible, .stApp a:focus-visible, .stApp summary:focus-visible {{
+  outline:2px solid {TEAL} !important; outline-offset:2px; }}
+[data-testid="stExpander"] details {{ border:1px solid var(--hcp-line) !important; border-radius:14px !important;
+  box-shadow:none !important; }}
+[data-testid="stExpander"] summary {{ border-radius:14px; transition:background-color .18s ease; }}
+[data-testid="stExpander"] summary:hover {{ background:#F6F9FB; }}
+[data-testid="stButtonGroup"] button {{ transition:background-color .2s ease, color .2s ease, border-color .2s ease; }}
+
+.ctanote {{ text-align:center; font-size:.9rem; color:var(--hcp-muted); margin:.4rem auto 0; max-width:40em; }}
+/* ---- restrained motion, always optional ---- */
+@keyframes hcpIn {{ from {{ opacity:0; transform:translateY(6px); }} to {{ opacity:1; transform:none; }} }}
+.st-key-restabs ~ * .stg, .tq2 {{ animation:hcpIn .35s var(--hcp-ease) both; }}
+@media (prefers-reduced-motion: reduce) {{
+  .st-key-topnav, .st-key-navlinks button, .st-key-navlinks button::after, .brand2 .bsub, .brand2 .bmark, .stApp button {{
+    transition:none !important; }}
+  .st-key-restabs ~ * .stg, .tq2 {{ animation:none !important; }}
+  html, [data-testid="stMain"], [data-testid="stAppViewContainer"] {{ scroll-behavior:auto !important; }} }}
+</style>
+"""
+
+
 def inject_css():
     st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(DESIGN_CSS, unsafe_allow_html=True)
 
 
 def esc(x):
@@ -1402,12 +1736,40 @@ WL_ICONS = {
 
 
 def mechanism():
-    """Static, labelled version of the hero's flow motif: what the simulation recreates."""
-    items = [("arrive", "Patients arrive"), ("stay", "Stay in a bed"), ("wait", "Wait if beds are full"),
-             ("return", "Some return after discharge")]
-    return ('<div class="wl-mech">' + "".join(
-        f'<div class="mi"><span class="mn">{WL_ICONS[k]}</span><span class="ml">{esc(t)}</span></div>'
-        for k, t in items) + "</div>")
+    """What the simulation recreates, in plain English (static; mirrors the hero's flow motif)."""
+    items = [("arrive", "Patients arrive", "Admissions arrive day by day, following historical patterns."),
+             ("stay", "They stay in a bed", "Each stay lasts a number of days drawn from past records."),
+             ("wait", "They wait if beds are full", "When every bed is taken, new requests queue for the next free bed."),
+             ("return", "Some come back", "Some patients are readmitted after discharge and need a bed again.")]
+    return ('<ol class="wl-mech">' + "".join(
+        f'<li class="mi"><span class="mn">{WL_ICONS[k]}</span><span class="ml">{esc(t)}</span>'
+        f'<span class="md">{esc(d)}</span></li>' for k, t, d in items) + "</ol>")
+
+
+def wl_preview(kind):
+    """Small schematic for a planning question. Illustrative only: no data, no simulated values."""
+    bars, extra = [], ""
+    if kind == "demand":
+        hs = [26, 30, 34, 39, 45, 52, 58]
+        for i, h in enumerate(hs):
+            over = max(0, h - 46)
+            bars.append(f'<rect x="{14 + i * 19}" y="{74 - h}" width="11" height="{h}" rx="3" class="b"/>')
+            if over:
+                bars.append(f'<rect x="{14 + i * 19}" y="{74 - h}" width="11" height="{over + 2}" rx="3" class="o"/>')
+        extra = '<line x1="6" x2="150" y1="28" y2="28" class="cap"/>'
+    elif kind == "beds":
+        hs = [40, 46, 42, 50, 44, 48, 41]
+        bars = [f'<rect x="{14 + i * 19}" y="{74 - h}" width="11" height="{h}" rx="3" class="b"/>' for i, h in enumerate(hs)]
+        extra = ('<line x1="6" x2="150" y1="30" y2="30" class="cap dim"/><line x1="6" x2="150" y1="16" y2="16" class="cap"/>'
+                 '<path d="M146 27 V19 M142 22 L146 18 L150 22" class="arr"/>')
+    else:
+        hs = [48, 54, 44, 52, 46, 50, 45]
+        for i, h in enumerate(hs):
+            bars.append(f'<rect x="{14 + i * 19}" y="{74 - h}" width="11" height="{h}" rx="3" class="g"/>')
+            bars.append(f'<rect x="{14 + i * 19}" y="{74 - round(h * .78)}" width="11" height="{round(h * .78)}" rx="3" class="b"/>')
+        extra = '<line x1="6" x2="150" y1="22" y2="22" class="cap"/>'
+    return ('<figure class="wqv" aria-hidden="true"><svg viewBox="0 0 156 80">' + extra + "".join(bars)
+            + '<line x1="6" x2="150" y1="74.5" y2="74.5" class="ax"/></svg><figcaption>Illustrative only, not simulation output</figcaption></figure>')
 
 
 WELCOME_CSS = f"""
@@ -1457,7 +1819,7 @@ WELCOME_CSS = f"""
 /* section heads */
 .wl-h2 {{ font-size:clamp(1.6rem, 2.2vw, 2.05rem) !important; font-weight:750 !important; color:{NAVY} !important;
   letter-spacing:-0.025em; margin:0 0 .35rem !important; padding:0 !important; }}
-.wl-sub {{ font-size:1.06rem; color:#46586A; margin:0 0 1.5rem; max-width:40em; line-height:1.55; }}
+.wl-sub {{ font-size:1.06rem; color:#46586A; margin:0 0 1.5rem; max-width:48em; line-height:1.55; }}
 /* management questions: open layout, hairline dividers, no boxes */
 .st-key-wl_qs [data-testid="stHorizontalBlock"] {{ gap:0 !important; }}
 .st-key-wl_qs [data-testid="stColumn"] {{ padding:4px 30px 6px; border-left:1px solid #DCE4EC; }}
@@ -1497,6 +1859,76 @@ WELCOME_CSS = f"""
 .wlp-none {{ font-size:.92rem; color:#66778A; font-style:normal; }}
 .st-key-wl_path button {{ border-radius:999px !important; min-height:2.5rem; padding:0 18px !important; }}
 .st-key-wl_path button p {{ font-weight:650 !important; font-size:.96rem !important; white-space:nowrap; }}
+/* ---- v5.4 hero proof line ---- */
+.st-key-wl_hero {{ margin-bottom:3.4rem; }}
+.wl-lead {{ max-width:31em; color:#DCE6EF; }}
+/* ---- v5.4 planning-question picker (CSS only: choosing does not rerun the app) ---- */
+.sr {{ position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }}
+.st-key-wl_pick {{ margin:0 0 .6rem; }}
+.st-key-wl_pick [data-testid="stHorizontalBlock"] {{ align-items:flex-start; }}
+.wqopts {{ border:none; margin:0; padding:0; min-width:0; display:flex; flex-direction:column; gap:6px; }}
+.wqo {{ position:relative; display:flex; gap:14px; align-items:flex-start; padding:16px 18px 16px 16px; border-radius:16px;
+  cursor:pointer; border:1px solid transparent; transition:background-color .2s ease, border-color .2s ease, box-shadow .25s ease; }}
+.wqo input {{ position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none; }}
+.wqo:hover {{ background:rgba(255,255,255,.65); }}
+.wqo:has(input:checked), .st-key-wl_pick:not(:has(input:checked)) .wqo-demand {{ background:#fff; border-color:#DCE6EE; box-shadow:0 14px 30px -22px rgba(11,37,69,.5); }}
+.wqo::before {{ content:""; position:absolute; left:-1px; top:18px; bottom:18px; width:3px; border-radius:3px; background:{TEAL};
+  transform:scaleY(0); transition:transform .25s cubic-bezier(.2,.7,.2,1); }}
+.wqo:has(input:checked)::before, .st-key-wl_pick:not(:has(input:checked)) .wqo-demand::before {{ transform:scaleY(1); }}
+.wqo:has(input:focus-visible) {{ outline:2px solid {TEAL}; outline-offset:2px; }}
+.wqi {{ flex:none; width:42px; height:42px; border-radius:12px; background:#E9F0F5; color:{NAVY_2}; display:flex;
+  align-items:center; justify-content:center; transition:background-color .2s ease, color .2s ease; }}
+.wqi svg {{ width:22px; height:22px; }}
+.wqo:has(input:checked) .wqi, .st-key-wl_pick:not(:has(input:checked)) .wqo-demand .wqi {{ background:{TEAL}; color:#fff; }}
+.wqt b {{ display:block; font-size:.88rem; font-weight:700; color:{TEAL_DARK}; margin-bottom:3px; }}
+.wqt span {{ display:block; font-size:1.04rem; font-weight:560; color:#34475A; line-height:1.38; }}
+.wqo:has(input:checked) .wqt span, .st-key-wl_pick:not(:has(input:checked)) .wqo-demand .wqt span {{ color:{NAVY}; font-weight:640; }}
+/* all three panels share one grid cell, so the section keeps the height of the tallest: no layout jump */
+.wqps {{ display:grid; }}
+.wqp {{ grid-area:1 / 1; visibility:hidden; opacity:0; transform:translateY(4px); padding:26px 28px 24px;
+  border-radius:22px; border:1px solid #E1EAEF; background:linear-gradient(160deg, #FFFFFF 0%, #F2F8F7 100%);
+  transition:opacity .22s ease, transform .28s cubic-bezier(.2,.7,.2,1), visibility 0s linear .22s; }}
+.st-key-wl_pick:has(#wq-demand:checked) .wqp-demand, .st-key-wl_pick:has(#wq-beds:checked) .wqp-beds,
+.st-key-wl_pick:has(#wq-flow:checked) .wqp-flow, .st-key-wl_pick:not(:has(input:checked)) .wqp-demand {{
+  visibility:visible; opacity:1; transform:none; transition:opacity .22s ease, transform .28s cubic-bezier(.2,.7,.2,1); }}
+.wqd {{ margin:20px 0 0; padding:16px 0 0; border-top:1px solid #E1E9EF; display:grid; gap:12px; }}
+.wqd > div {{ display:grid; grid-template-columns:11.5em 1fr; gap:16px; align-items:baseline; }}
+.wqd dt {{ font-size:.86rem; font-weight:700; color:{TEAL_DARK}; }}
+.wqd dd {{ margin:0; font-size:.98rem; color:#34475A; line-height:1.5; }}
+.wqd > div:last-child dd {{ color:{NAVY}; font-weight:600; }}
+.wqp-top {{ display:flex; gap:22px; justify-content:space-between; align-items:flex-start; }}
+.wqp-k {{ font-size:.88rem; font-weight:700; color:{TEAL_DARK}; }}
+.wqp-k .wl-opt {{ font-size:.72rem; font-weight:700; color:{MUTED}; background:#EEF2F6; border-radius:999px; padding:1px 8px;
+  margin-left:8px; vertical-align:1px; }}
+.wqp-q {{ font-size:1.42rem; font-weight:740; color:{NAVY}; letter-spacing:-0.02em; line-height:1.25; margin:5px 0 8px; max-width:22em; }}
+.wqp p {{ font-size:1rem; color:#46586A; line-height:1.55; max-width:34em; margin:0; }}
+.wqv {{ margin:0; flex:none; width:156px; text-align:right; }}
+.wqv svg {{ width:156px; height:80px; display:block; }}
+.wqv .b {{ fill:{TEAL}; opacity:.85; }} .wqv .o {{ fill:#E3A55A; }}
+.wqv .g {{ fill:none; stroke:#AFC0CE; stroke-width:1.2; stroke-dasharray:2 2; }}
+.wqv .cap {{ stroke:{NAVY}; stroke-width:1.5; stroke-dasharray:4 3; }} .wqv .cap.dim {{ stroke:#B4C1CD; }}
+.wqv .arr {{ stroke:{NAVY}; stroke-width:1.5; fill:none; stroke-linecap:round; stroke-linejoin:round; }}
+.wqv .ax {{ stroke:#C9D4DE; }}
+.wqv figcaption {{ font-size:.72rem; color:#7A8A9A; margin-top:3px; }}
+.st-key-wl_go {{ min-height:3.2rem; }}
+.st-key-wl_pick [class*="st-key-wlgo_"] {{ margin-top:6px; }}
+.st-key-wl_pick [class*="st-key-wlgo_"] button {{ border-radius:999px !important; min-height:2.8rem; padding:0 22px !important; }}
+.st-key-wl_pick [class*="st-key-wlgo_"] button p {{ font-weight:650 !important; }}
+@supports selector(:has(*)) {{
+  .st-key-wl_pick [class*="st-key-wlgo_"] {{ display:none !important; }}
+  .st-key-wl_pick:has(#wq-demand:checked) .st-key-wlgo_demand, .st-key-wl_pick:has(#wq-beds:checked) .st-key-wlgo_beds,
+  .st-key-wl_pick:has(#wq-flow:checked) .st-key-wlgo_flow,
+  .st-key-wl_pick:not(:has(input:checked)) .st-key-wlgo_demand {{ display:flex !important; }} }}
+@supports not selector(:has(*)) {{ .wqps {{ display:block; }} .wqp {{ visibility:visible; opacity:1; transform:none; margin-bottom:12px; }} }}
+@media (max-width: 1100px) {{
+  .st-key-wl_pick [data-testid="stHorizontalBlock"], .st-key-wl_des [data-testid="stHorizontalBlock"] {{ flex-direction:column !important; gap:1rem !important; }}
+  .st-key-wl_pick [data-testid="stColumn"], .st-key-wl_des [data-testid="stColumn"] {{ width:100% !important; flex:1 1 auto !important; }}
+  .wqopts {{ flex-direction:row; flex-wrap:wrap; }} .wqo {{ flex:1 1 200px; }} }}
+/* mechanism with plain-English descriptions */
+ol.wl-mech {{ list-style:none; margin:0; padding:0; }}
+.wl-mech .mi {{ margin:0; }}
+.wl-mech .md {{ font-size:.86rem; color:#55677A; line-height:1.45; max-width:13em; }}
+.st-key-wl_des {{ background:radial-gradient(700px 260px at 100% 0%, rgba(14,138,126,.08), rgba(14,138,126,0) 70%), #FFFFFF; }}
 /* responsive */
 @media (max-width: 1100px) {{ .st-key-wl_hero {{ padding:40px 32px 34px; }} .st-key-wl_qs [data-testid="stColumn"] {{ padding:4px 18px 6px; }} }}
 @media (max-width: 760px) {{
@@ -1505,8 +1937,11 @@ WELCOME_CSS = f"""
   .st-key-wl_qs [data-testid="stColumn"] {{ border-left:none; padding:0 0 18px; border-bottom:1px solid #DCE4EC; }}
   .st-key-wl_des {{ padding:24px 20px; }}
   .wl-mech {{ grid-template-columns:repeat(2, 1fr); row-gap:18px; }} .wl-mech::before {{ display:none; }}
-  .st-key-wl_path [data-testid="stColumn"]::after {{ display:none; }} }}
+  .st-key-wl_path [data-testid="stColumn"]::after {{ display:none; }}
+  .wqd > div {{ grid-template-columns:1fr; gap:2px; }}
+  .wqp-top {{ flex-direction:column; }} .wqv {{ display:none; }} .wqp {{ padding:22px 20px 18px; }} }}
 @media (prefers-reduced-motion: reduce) {{
+  .wqp, .wqo, .wqo::before, .wqi {{ transition:none !important; transform:none !important; }}
   .wl-h1, .wl-lead, .wl-q, .st-key-wl_cta, .flowart {{ animation:none !important; }}
   .flowart .mv {{ display:none; }} .flowart .bed.pulse, .flowart .q {{ animation:none !important; }}
   .st-key-wl_cta button {{ transition:none !important; }} }}

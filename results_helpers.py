@@ -540,7 +540,7 @@ def verdict(R):
     return dict(level=sc["level"], label=STATUS_LABEL[sc["level"]], head=head, sub=sub.strip())
 
 
-def rhythm_text(R, what="occupied"):
+def rhythm_text(R, what="occupied", lead="Why does the line go up and down every week?"):
     """Plain-language explanation of the weekly up-and-down pattern, computed from the data and this run."""
     wd, _ = H.weekday_pattern()
     top = wd.sort_values("per_day", ascending=False)
@@ -563,7 +563,7 @@ def rhythm_text(R, what="occupied"):
         else:
             qtxt = (f" Waiting starts on the busy days (most often on <b>{top_q}s</b>) and, when beds stay full, "
                     "carries over into the following days.")
-    return (f"<b>Why does the line go up and down every week?</b> It is the weekly admission rhythm in the historical "
+    return (f"<b>{lead}</b> It is the weekly admission rhythm in the historical "
             f"data, not an error or random noise. In 2011–12 most patients were admitted on <b>{hi1.weekday}</b> "
             f"(≈{hi1.per_day:,.0f}/day) and <b>{hi2.weekday}</b> (≈{hi2.per_day:,.0f}/day) and fewest on "
             f"<b>{lo.weekday}</b> (≈{lo.per_day:,.0f}/day). Because patients stay several days, beds fill up after the "

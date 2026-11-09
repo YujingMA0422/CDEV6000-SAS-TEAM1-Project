@@ -8,6 +8,7 @@ The discrete-event simulation (simulation.py) is used unchanged. This file arran
 existing model functions and presents their outputs. Research prototype - not a clinical or forecasting tool.
 """
 import inspect
+import copy
 import json
 from datetime import datetime
 from pathlib import Path
@@ -49,7 +50,7 @@ DEFAULTS = dict(diagnosis="CHF", severity=3, age="All ages", reduction=10, deman
                 custom_beds=None, reps=10, seed=2026, breakdown=True, flow_on=False)
 UI_DEFAULTS = dict(reduction_pick=10, readmit_pick=0, demand_pick=0, ov_metric="total_bd", ov_all=False, ov_pick="CHF|3", ex_dx="CHF", ex_sev=3, ov_age="All ages",
                    ov_view="Monthly", ov_source="total", ov_split=False, bed_view="Weekly trend",
-                   adm_series="New admissions", adm_view="Weekly")
+                   adm_series="New admissions", adm_view="Weekly", res_tab="overview", trend_view="Beds")
 if "cfg" not in ss:
     ss.cfg = dict(DEFAULTS)
 if "ui" not in ss:
@@ -176,6 +177,19 @@ def run_problem(settings):
     return None
 
 
+def local_now():
+    """Current time in the viewer's time zone (from the browser, Streamlit >= 1.42), else Sydney time.
+    A hosted server usually runs on UTC, so datetime.now() alone would show the server's clock."""
+    from zoneinfo import ZoneInfo
+    for tz in (getattr(getattr(st, "context", None), "timezone", None), "Australia/Sydney"):
+        try:
+            if tz:
+                return datetime.now(ZoneInfo(tz))
+        except Exception:
+            continue
+    return datetime.now().astimezone()
+
+
 def do_run():
     settings, ref = current_settings()
     if run_problem(settings):
@@ -184,8 +198,11 @@ def do_run():
     with st.spinner(f"Running the simulation ({settings['duration']} days × {settings['reps']} runs for your scenario "
                     "and its comparisons). This usually takes under a minute..."):
         res = run_all(*t)
+    done = local_now()                              # timezone-aware completion time of this run
+    ss.ui["res_tab"], ss.ui["trend_view"] = "overview", "Beds"
+    ss.pop("w_ui_trend_view", None)
     ss.result = dict(settings=settings, key=t, res=res, bed_mode=ss.cfg["bed_mode"], reference=ref,
-                     finished=datetime.now().strftime("%d %b %Y, %H:%M"))
+                     finished_at=done, finished=done.strftime("%d %b %Y, %H:%M %Z").strip())
     go_to("results")
     st.rerun()
 
@@ -241,29 +258,60 @@ def render_nav():
                 st.button(label, key=f"nav_{key}", type="primary" if ss.page == key else "tertiary",
                           on_click=go_to, args=(key,))
         with st.container(key="navactions", horizontal=True, gap="xsmall", width="content", vertical_alignment="center"):
-            st.button("Export", key="nav_export", icon=":material/download:",
-                      type="primary" if ss.page == "export" else "tertiary", on_click=go_to, args=("export",),
-                      help="Download data from your latest completed run")
+            # compact alternative to the page links on narrow windows (shown by CSS below 1100px)
+            with st.popover("Menu", icon=":material/menu:", help="Go to a page", key="nav_menu"):
+                for key, label in NAV_ITEMS:
+                    st.button(label, key=f"navm_{key}", type="primary" if ss.page == key else "tertiary",
+                              on_click=go_to, args=(key,), width="stretch")
             with st.popover("", icon=":material/help:", help="Help and about", key="nav_help"):
                 render_help()
+
+
+NAV_SCRIPT = """<script>
+(function(){
+  const P = window.parent, D = P.document;
+  if (P.__hcpNav) return; P.__hcpNav = true;
+  // one listener in the parent page: compact header after scrolling, full header near the top (with hysteresis)
+  const s = D.createElement('script');
+  s.textContent = "(function(){var b=document.body,c=false;function top(t){return (t&&t.scrollTop!==undefined&&t!==document)?t.scrollTop:(document.scrollingElement||document.documentElement).scrollTop;}" +
+    "function on(e){var t=e&&e.target;if(t&&t!==document&&!(t.contains&&t.contains(document.querySelector('.block-container'))))return;var y=top(t);if(!c&&y>48){c=true;b.setAttribute('data-hcp-nav','compact');}else if(c&&y<12){c=false;b.removeAttribute('data-hcp-nav');}}" +
+    "document.addEventListener('scroll',on,{capture:true,passive:true});})();";
+  D.body.appendChild(s);
+})();
+</script>"""
+
+
+def nav_behaviour():
+    """Installs the compact-on-scroll header once per browser tab (no reruns, no Python state)."""
+    import streamlit.components.v1 as components
+    components.html(NAV_SCRIPT, height=0)
 
 
 def render_footer():
     c1, c2 = st.columns([5, 1.2], vertical_alignment="center")
     c1.markdown('<div class="footer">Research prototype for exploring hypothetical scenarios — not a clinical tool or a '
                 f'forecast of bed requirements. Historical data {H.PERIOD_LABEL}.</div>', unsafe_allow_html=True)
-    if ss.page != "simulator":                     # Build a Scenario: documentation stays in the Help menu
-        c2.button("Model documentation", key="foot_docs", on_click=go_to, args=("docs",), **BTN_KW)
+
 
 
 # =========================================================================== PAGE 1: WELCOME
 WELCOME_QUESTIONS = [
-    ("demand", "Higher admission demand", "What happens if more patients need admission?",
-     "Explore how higher demand could affect hospital capacity and waiting times.", "Set expected admissions", "step-2"),
-    ("beds", "Available bed capacity", "What if the hospital has more or fewer beds?",
-     "Test how different bed numbers could affect occupancy and waiting.", "Set available beds", "step-3"),
-    ("flow", "Patient flow improvements", "Could shorter stays or fewer readmissions help?",
-     "Explore whether targeted improvements could reduce pressure on hospital beds.", "Test improvements", "step-4"),
+    # key, label, question, (what you can test, what the results show, decisions it can inform), action, anchor
+    ("demand", "Rising Demand", "Can the hospital cope with more admissions?",
+     ("Higher or lower admission demand than historical levels, with the beds the hospital has.",
+      "How full beds become, how many beds a busy day would need, and how often and how long patients wait.",
+      "Whether current capacity can absorb expected growth, or when extra beds or flow improvements are needed."),
+     "Set Admission Demand", "step-2"),
+    ("beds", "Bed Capacity", "How would changing the number of available beds affect pressure and waiting?",
+     ("More or fewer available beds than the default for the same admission demand.",
+      "Occupancy, how many days end with patients waiting, and how large queues become.",
+      "How many beds to plan for, and how much spare capacity busier periods need."),
+     "Set Available Beds", "step-3"),
+    ("flow", "Patient Flow", "Could shorter stays or fewer readmissions help?",
+     ("Shorter initial stays and fewer readmissions for one chosen patient group.",
+      "Bed-days freed, return stays avoided and whether waiting changes.",
+      "Which patient groups to prioritise for improvement work, and whether it could ease bed pressure."),
+     "Test Patient-Flow Improvements", "step-4"),
 ]
 
 
@@ -281,16 +329,47 @@ def scroll_to_anchor(target):
         "go(0);</script>", height=0)
 
 
+def welcome_picker():
+    """"What would you like to explore?": three planning questions, chosen with plain HTML radio inputs.
+
+    No input carries a `checked` attribute: Streamlit renders markdown through React, which turns `checked` into a
+    controlled prop and restores it after every click (the cause of the earlier "first click selects the first
+    option" bug). With uncontrolled inputs the browser owns the selection, so switching never reruns the app and
+    never touches the scenario; CSS shows the first question while nothing has been chosen yet."""
+    opts = "".join(
+        f'<label class="wqo wqo-{k}" for="wq-{k}"><input type="radio" name="wq" id="wq-{k}" value="{k}">'
+        f'<span class="wqi">{UI.WL_ICONS[k]}</span><span class="wqt"><b>{lab}</b><span>{UI.esc(q)}</span></span></label>'
+        for k, lab, q, *_rest in WELCOME_QUESTIONS)
+    panels = ""
+    for k, lab, q, (test, see, decide), *_rest in WELCOME_QUESTIONS:
+        rows = "".join(f'<div><dt>{t}</dt><dd>{UI.esc(x)}</dd></div>' for t, x in (
+            ("What you can test", test), ("What the results show", see), ("Decisions it can inform", decide)))
+        panels += (f'<div class="wqp wqp-{k}"><div class="wqp-top"><div><div class="wqp-k">{lab}'
+                   f'{"<span class=wl-opt>Optional step</span>" if k == "flow" else ""}</div>'
+                   f'<div class="wqp-q">{UI.esc(q)}</div></div>{UI.wl_preview(k)}</div><dl class="wqd">{rows}</dl></div>')
+    with st.container(key="wl_pick"):
+        UI.md('<h2 class="wl-h2">What would you like to explore?</h2>'
+              '<p class="wl-sub">Choose a planning question to see what you can test and what it can help you decide.</p>')
+        c1, c2 = st.columns([0.92, 1.5], gap="large")
+        with c1:
+            UI.md(f'<fieldset class="wqopts"><legend class="sr">Planning question</legend>{opts}</fieldset>')
+        with c2:
+            UI.md(f'<div class="wqps">{panels}</div>')
+            with st.container(key="wl_go"):
+                for k, *_rest, action, anchor in WELCOME_QUESTIONS:
+                    st.button(action, key=f"wlgo_{k}", type="primary", icon=":material/arrow_forward:",
+                              icon_position="right", on_click=open_step, args=(anchor,))
+
+
 def page_welcome():
-    """Editorial introduction: why (hero), what (management questions), how (simulation), where to start."""
+    """Hero (value), planning-question picker (decisions), simulation in plain English, the three-step path."""
     UI.md(UI.WELCOME_CSS)
     with st.container(key="wl_hero"):
-        c1, c2 = st.columns([1, 1.1], gap="large", vertical_alignment="center")
+        c1, c2 = st.columns([1, 1.05], gap="large", vertical_alignment="center")
         with c1:
             UI.md('<h1 class="wl-h1">See the Impact<br>Before You Act</h1>'
-                  '<p class="wl-lead">Plan for changing hospital demand. Test different bed capacity and patient-flow '
-                  'improvements to see how they could affect bed pressure and waiting times.</p>'
-                  '<p class="wl-q">Could your hospital manage higher patient demand with its available beds?</p>')
+                  '<p class="wl-lead">Explore how changes in hospital demand, bed capacity and patient flow could '
+                  'affect occupancy and waiting — and compare planning options before making real-world decisions.</p>')
             with st.container(key="wl_cta", horizontal=True):
                 st.button("Build a Scenario", key="wl_build", type="primary", icon=":material/arrow_forward:",
                           icon_position="right", on_click=go_to, args=("simulator",))
@@ -299,39 +378,24 @@ def page_welcome():
         with c2:
             UI.md(UI.flow_art())
 
-    UI.md('<h2 class="wl-h2">What can you explore?</h2>'
-          '<p class="wl-sub">Three planning questions, all answered in the same scenario. Start with demand and beds; '
-          'patient-flow improvements are optional.</p>')
-    with st.container(key="wl_qs"):
-        cols = st.columns(3)
-        for col, (key, kicker, q, d, action, anchor) in zip(cols, WELCOME_QUESTIONS):
-            with col:
-                opt = '<span class="wl-opt">Optional</span>' if key == "flow" else ""
-                UI.md(f'<div class="wlq-ic">{UI.WL_ICONS[key]}</div><div class="wlq-k">{kicker}{opt}</div>'
-                      f'<div class="wlq-t">{q}</div><div class="wlq-d">{d}</div>')
-                st.button(action, key=f"wl_q_{key}", type="tertiary", icon=":material/arrow_forward:",
-                          icon_position="right", on_click=open_step, args=(anchor,))
+    welcome_picker()
 
     with st.container(key="wl_des"):
-        a, b = st.columns([1, 1.25], gap="large")
+        a, b = st.columns([1, 1.45], gap="large", vertical_alignment="center")
         with a:
-            UI.md('<div class="wl-des"><h2 class="wl-h2">How does the simulation help?</h2>'
-                  '<p>The tool uses Discrete-Event Simulation (DES) to recreate how patients arrive, stay in hospital, '
-                  'wait for beds and return after discharge.</p>'
-                  '<p>This helps you explore how different planning decisions might affect hospital capacity before '
-                  'making changes in practice.</p></div>')
+            UI.md('<div class="wl-des"><h2 class="wl-h2">How does the simulation work?</h2>'
+                  '<p>The tool uses Discrete-Event Simulation (DES). It follows simulated patients day by day through '
+                  'one shared pool of hospital beds, so you can see how pressure builds before it happens.</p></div>')
         with b:
             UI.md(UI.mechanism())
 
-    UI.md('<h2 class="wl-h2">How it works</h2>')
+    UI.md('<h2 class="wl-h2">Your Planning Journey</h2>'
+          '<p class="wl-sub">The steps you take in this tool, from understanding past demand to comparing plans.</p>')
     with st.container(key="wl_path"):
         has_result = ss.get("result") is not None
-        steps = [("Explore historical data", "Understand historical admissions and which patient groups use the most "
-                  "bed resources."),
-                 ("Build a scenario", "Choose a planning period, set admissions and beds, and optionally test "
-                  "patient-flow improvements."),
-                 ("Understand the results", "See how your scenario affects capacity and waiting, and compare different "
-                  "planning options.")]
+        steps = [("Explore historical data", "See which patient groups use the most bed-days."),
+                 ("Build a scenario", "Set demand and beds, and optionally test patient-flow improvements."),
+                 ("Understand and compare results", "Read the answer, explore the evidence and compare plans.")]
         cols = st.columns(3)
         for i, (col, (t, d)) in enumerate(zip(cols, steps), 1):
             with col:
@@ -603,6 +667,11 @@ def page_overview():
         UI.md('<div class="ctaq">Ready to explore how changes could affect hospital capacity?</div>')
         st.button("Build a Scenario", type="primary", key="ov_build", icon=":material/arrow_forward:",
                   icon_position="right", on_click=_to_simulator)
+    if ss.ui.get("ex_dx") and ss.ui.get("ex_sev"):
+        age_ = ss.ui.get("ov_age") or "All ages"
+        UI.md(f'<p class="ctanote">Your scenario will use {UI.esc(group_name(ss.ui["ex_dx"], ss.ui["ex_sev"]))}'
+              f'{"" if age_ == "All ages" else " patients " + AGE_PHRASE.get(age_, "")}'
+              ' as the target group for optional patient-flow improvements. Nothing runs until you choose to.</p>')
 
 
 def _chart_note(text):
@@ -1024,17 +1093,69 @@ def E(metric, scen="Scenario"):
     return RV.e(metric, scen)
 
 
-REF_NAMES = {"Reference": "Reference Scenario", "Conditions only": "Same Conditions, No Improvements"}
-RES_SECTIONS = [("capacity-overview", "Capacity Overview"), ("compare-scenarios", "Compare Scenarios"),
-                ("planning-impact", "Impact of Changes"), ("explore-options", "Explore Another Option")]
+
+SVG_ICONS = {
+    "bed": '<path d="M3 7v12M3 15h18v4M3 12h18v3"/><rect x="6" y="9" width="4" height="3" rx="1"/>',
+    "schedule": '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    "info": '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
+    "check_circle": '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.2l2.4 2.4 4.7-5"/>',
+    "warning": '<path d="M12 4l9 15.5H3z"/><path d="M12 10v4.5M12 17h.01"/>',
+    "radio_button_partial": '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17"/>',
+    "trending_down": '<path d="M3 7l6 6 4-4 8 8"/><path d="M15 17h6v-6"/>',
+    "trending_up": '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+    "sync_alt": '<path d="M5 9h13l-3-3M19 15H6l3 3"/>',
+    "lightbulb": '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/>',
+}
+
+
+def ic(name):
+    """Small inline line icon (no icon font needed)."""
+    return (f'<span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            f'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">{SVG_ICONS.get(name, SVG_ICONS["info"])}</svg></span>')
+
+
+RUN_LABELS = {"Reference": "Baseline Scenario", "Scenario": "Your Scenario",
+              "Conditions only": "Same demand and beds, without improvements",
+              "Baseline": "No changes, same beds as your scenario", "Demand only": "Admission change only",
+              "LOS only": "Shorter stays only", "Readmissions only": "Fewer readmissions only"}
 FULL_OCC = 98.5          # % average occupancy treated as "at capacity" in the wording
 TAIL_DAYS = 140          # simulation follow-up after the period (simulation.TAIL_DAYS)
 
 
-# ---------------------------------------------------------------- scenario description
+# ---------------------------------------------------------------- formatting
+def fmt_generated(result):
+    """'9 Nov 2026, 5:54 pm AEDT' from the timezone-aware completion time stored with the run."""
+    dt = result.get("finished_at")
+    if dt is None:
+        return result.get("finished", "")
+    return f"{dt.day} {dt:%b %Y}, {dt.hour % 12 or 12}:{dt:%M} {'am' if dt.hour < 12 else 'pm'} {dt:%Z}".strip()
+
+
+def fmt_wait(v):
+    """Days, never showing a small non-zero average as '0 days' (the model counts whole days per request)."""
+    if v is None or not RH.finite(v):
+        return "Not estimable"
+    if v == 0:
+        return "0 days"
+    if v < 0.01:
+        return "under 0.01 days"
+    return f"{v:.2f} days" if v < 10 else f"{v:.1f} days"
+
+
+def fmt_pct(v):
+    """Percent with enough precision that two different small values never both read '<1%'."""
+    if v is None or not RH.finite(v):
+        return "Not estimable"
+    if v == 0:
+        return "0%"
+    if v < 0.1:
+        return "<0.1%"
+    return f"{v:.1f}%" if v < 10 else f"{v:.0f}%"
+
+
 def _pattern_phrase(s):
-    return ("the average historical weekly admission pattern" if s["season"] == "Annual average"
-            else f"historical admission patterns starting in {H.MONTH_FULL[s['season']]}")
+    return ("the typical-week admission pattern" if s["season"] == "Annual average"
+            else f"the historical admission pattern starting in {H.MONTH_FULL[s['season']]}")
 
 
 def _group_phrase(s):
@@ -1048,29 +1169,54 @@ def _patients(s):
             + ("" if s["age"] == "All ages" else f" {AGE_PHRASE[s['age']]}"))
 
 
-def _imp_list(s):
-    return " and ".join(x for x in (f"{s['reduction']}% shorter stays" if s["reduction"] else "",
+def _imp_list(s, initial=True):
+    return " and ".join(x for x in (f"{s['reduction']}% shorter {'initial ' if initial else ''}stays"
+                                    if s["reduction"] else "",
                                     f"{s['readmit']}% fewer readmissions" if s["readmit"] else "") if x)
 
 
-def scenario_sentences(s):
-    """'The Scenario You Tested': one or two plain sentences generated from the run's own settings."""
-    beds = f"{s['beds']:,} available beds" + (" (the default)" if s["beds"] == s["ref_beds"] else "")
-    if RH.scenario_case(s) == "none":
-        return [f"You tested the reference scenario: historical admission levels and {beds} over {s['duration']} days, "
-                f"using {_pattern_phrase(s)}, with no changes."]
-    dem = ("historical admission levels" if not s["demand"] else
+def scenario_question(s):
+    """Short question the run answers; the detailed settings are shown right below it."""
+    case = RH.scenario_case(s)
+    beds = "its default beds" if s["beds"] == s["ref_beds"] else f"{s['beds']:,} beds"
+    dem = ("historical admission demand" if not s["demand"] else
            f"{abs(s['demand'])}% {'more' if s['demand'] > 0 else 'fewer'} admissions")
-    out = [f"You tested a {s['duration']}-day scenario with {dem} and {beds}, using {_pattern_phrase(s)}."]
+    what = " and ".join(x for x in ("shorter stays" if s["reduction"] else "",
+                                    "fewer readmissions" if s["readmit"] else "") if x)
+    who = (f"{cond_label(s['diagnosis'])} Severity {s['severity']} patients"
+           + ("" if s["age"] == "All ages" else f" {AGE_PHRASE[s['age']]}"))
+    if case == "none":
+        return f"How does the hospital manage historical admission demand with {beds}?"
+    if case == "conditions":
+        return f"Could the hospital manage {dem} with {beds}?"
+    if case == "improve":
+        return f"Could {what} for {who} reduce bed pressure?"
+    return f"Could the hospital manage {dem} with {beds}, and would {what} for {who} help?"
+
+
+def scenario_settings_rows(s):
+    """Compact settings overview shown under the question (only relevant rows; no bare 'No change')."""
+    rows = [("Planning period", f"{s['duration']} days · " + ("typical-week pattern" if s["season"] == "Annual average"
+                                                              else f"historical pattern from {H.MONTH_FULL[s['season']]}")),
+            ("Expected admissions", "Historical level (0% change)" if not s["demand"] else
+             f"{abs(s['demand'])}% {'above' if s['demand'] > 0 else 'below'} the historical level"),
+            ("Available beds", f"{s['beds']:,} (default)" if s["beds"] == s["ref_beds"]
+             else f"{s['beds']:,} (default {s['ref_beds']:,})")]
     if s["reduction"] or s["readmit"]:
-        out.append(f"You also tested whether {_imp_list(s)} for {_patients(s)} could help reduce bed pressure.")
-    return out
+        rows.append(("Target patient group", f"{cond_label(s['diagnosis'])} · Severity {s['severity']} · "
+                                             f"{AGE_PICK[s['age']]}"))
+        rows.append(("Shorter initial stays", f"{s['reduction']}% for eligible initial stays in this group"
+                     if s["reduction"] else "None (0%)"))
+        rows.append(("Readmission reduction", f"{s['readmit']}% lower readmission rate in this group"
+                     if s["readmit"] else "None (0%)"))
+    return rows
 
 
-def reference_text(s):
-    """What the reference run is (matches results_helpers.build_runs: no changes, default beds, same period/seeds)."""
-    return (f"The reference uses historical admission demand, the default {s['ref_beds']:,} beds and no patient-flow "
-            f"improvements over the same {s['duration']}-day period and admission pattern.")
+def baseline_text(s):
+    """The baseline actually run (results_helpers.build_runs 'Reference'): no changes, default beds, same period,
+    pattern, duration and random seeds."""
+    return (f"Baseline: the same {s['duration']}-day period and {_pattern_phrase(s)}, with historical admission "
+            f"levels, the default {s['ref_beds']:,} beds and no patient-flow improvements.")
 
 
 # ---------------------------------------------------------------- paired comparisons between any two runs
@@ -1104,6 +1250,12 @@ def run_mean(res, name, metric):
     return float(v.mean()) if len(v) and not v.isna().any() else None
 
 
+def waited_delay(res, name):
+    """Average wait among requests that waited (ratio of run means: mean wait / share waiting), in days."""
+    mw, w = run_mean(res, name, "mean_wait_days"), run_mean(res, name, "waited_pct")
+    return None if mw is None or not w else mw / (w / 100)
+
+
 def full_day_share(res, name, beds):
     """Share of days on which beds were full in every run (replication-averaged occupancy at the limit)."""
     dl = res["daily"][res["daily"].scenario == name]
@@ -1114,86 +1266,59 @@ def waits_ok(res, *names):
     return all((run_mean(res, n, "unresolved_requests") or 0) == 0 for n in names)
 
 
-# ---------------------------------------------------------------- semantic change chips
-def dchip(p, unit="", dp=0, better=None, pts=False):
-    """Change indicator. better: 'down' / 'up' / None (no favourable direction). Grey when within run-to-run
-    variation. Arrow, number and unit always shown, so colour is never the only cue."""
+# ---------------------------------------------------------------- plain-language change statements
+UNCLEAR_TIP = "The simulations did not show a consistent enough change to draw a clear conclusion."
+
+
+def change_text(p, kind, better=None, noun=""):
+    """(text, css class). kind: 'pp' percentage points, 'days', 'beds', 'count', 'bed-days'.
+    Colour only when the paired difference is clear and the metric has a favourable direction."""
     if p is None:
-        return '<span class="dchip flat">Not estimable</span>'
-    if not p["clear"] or round(p["diff"], dp) == 0:
-        return '<span class="dchip flat">No clear difference</span>'
-    up = p["diff"] > 0
-    cls = "neutral" if better is None else ("good" if (up == (better == "up")) else "bad")
-    u = " pts" if pts else (f" {unit}" if unit else "")
-    return f'<span class="dchip {cls}">{"▲" if up else "▼"} {abs(p["diff"]):,.{dp}f}{u}</span>'
-
-
-def _kcard(title, value, sub, chip="", tip=""):
-    return (f'<div class="rk2"><div class="t">{title}{(" " + _tip(tip)) if tip else ""}</div>'
-            f'<div class="v">{value}</div>{chip}<div class="n">{sub}</div></div>')
-
-
-def _days(v):
-    return "0 days" if v is not None and v < 0.005 else (f"{v:.2f} days" if v < 1 else f"{v:.1f} days")
-
-
-def capacity_cards(s, res, a="Reference", b="Scenario", show_ref=True):
-    """Main KPI row: occupancy, average wait, busy-day bed demand, requests that waited (scenario b vs run a)."""
-    cards = []
-    occ = pair(res, a, b, "occupancy_pct")
-    full = full_day_share(res, b, s["beds"])
-    occ_sub = (f"Reference: {occ['a']:.0f}% of {s['ref_beds']:,} beds" if show_ref else
-               f"of {s['beds']:,} available beds")
-    if occ["b"] >= FULL_OCC:
-        occ_sub += f" · full on {full * 100:.0f}% of days"
-    cards.append(_kcard("Bed Occupancy", f"{occ['b']:.0f}%", occ_sub,
-                        dchip(occ, dp=0, pts=True) if show_ref else "",
-                        "Average share of the available beds in use each day. It cannot go above 100%, so once beds "
-                        "are full, waiting shows the extra pressure."))
-    ok = waits_ok(res, b) and (waits_ok(res, a) or not show_ref)
-    if waits_ok(res, b):
-        w = pair(res, a, b, "mean_wait_days") if show_ref and waits_ok(res, a) else None
-        wb = run_mean(res, b, "mean_wait_days")
-        dw = RH.delay_if_waited(RH.Results(s, view_of(res, a)), "Scenario") if b == "Scenario" else None
-        sub = (f"Reference: {_days(run_mean(res, a, 'mean_wait_days'))}" if show_ref and waits_ok(res, a)
-               else ("Reference: not estimable" if show_ref else "per bed request"))
-        if dw:
-            sub += f" · about {dw:.1f} days for those who waited"
-        cards.append(_kcard("Average Wait for a Bed", _days(wb), sub,
-                            dchip(w, "days", 2, "down") if (show_ref and w) else "",
-                            "Average days from asking for a bed to getting one, over all bed requests in the period "
-                            "(new admissions and readmissions), counting same-day admissions as 0. Whole days."))
+        return "Not estimable", "flat"
+    if not p["clear"]:
+        return "No clear difference between the two scenarios", "flat"
+    d, up = abs(p["diff"]), p["diff"] > 0
+    if kind == "pp":
+        if d < 0.05:
+            return "No clear difference between the two scenarios", "flat"
+        txt = f"{d:.1f} point{'s' if round(d, 1) != 1 else ''} {'higher' if up else 'lower'}"
+    elif kind == "days":
+        if d < 0.005:
+            return "No clear difference between the two scenarios", "flat"
+        txt = f"{d:.2f} days {'longer' if up else 'shorter'}"
+    elif kind == "beds":
+        if round(d) == 0:
+            return "No clear difference between the two scenarios", "flat"
+        txt = f"{d:,.0f} {'more' if up else 'fewer'} beds"
     else:
-        us = run_mean(res, b, "unresolved_requests")
-        cards.append(_kcard("Average Wait for a Bed", "Not estimable",
-                            f"About {us:,.0f} requests were still waiting {TAIL_DAYS} days after the period, so an "
-                            "average would understate waiting.", "", ""))
-    nb = pair_unlimited(res, a, b, "nb")
-    over = nb["b"] - s["beds"]
-    nb_sub = (f"{over:,.0f} more than the {s['beds']:,} available" if over > 0 else
-              f"within the {s['beds']:,} available")
-    if show_ref:
-        nb_sub += f" · Reference: {nb['a']:,.0f}"
-    cards.append(_kcard("Estimated Busy-day Bed Demand", f"{nb['b']:,.0f} beds", nb_sub,
-                        dchip(nb, "beds", 0, "down") if show_ref else "",
-                        "An estimate of bed demand on busier days, before applying the available-bed limit: the "
-                        "95th percentile of beds in use per day in separate runs with no bed limit. Not a staffed bed "
-                        "count or a guaranteed requirement."))
-    if waits_ok(res, b):
-        wp = pair(res, a, b, "waited_pct") if show_ref and waits_ok(res, a) else None
-        cards.append(_kcard("Bed Requests That Waited", RH.fmt_pct_small(run_mean(res, b, "waited_pct")),
-                            (f"Reference: {RH.fmt_pct_small(run_mean(res, a, 'waited_pct'))}" if show_ref and waits_ok(res, a)
-                             else ("Reference: not estimable" if show_ref else "waited at least one day")),
-                            dchip(wp, dp=1, better="down", pts=True) if (show_ref and wp) else "",
-                            "Share of bed requests (new admissions and readmissions) that waited at least one day."))
-    else:
-        cards.append(_kcard("Bed Requests That Waited", "Not estimable",
-                            "Demand exceeded the available beds: some requests never got a bed within the follow-up.",
-                            "", ""))
-    return '<div class="rkrow2">' + "".join(cards) + "</div>"
+        if round(d) == 0:
+            return "No clear difference between the two scenarios", "flat"
+        txt = f"{d:,.0f} {'more' if up else 'fewer'} {noun or kind}"
+    # Consistent but negligible changes are not highlighted as improvements or deteriorations.
+    base = abs(p.get("a") or 0)
+    tiny = {"pp": 0.5, "days": 0.05}.get(kind, max(1.0, 0.01 * base))
+    if d < tiny:
+        return f"Slightly {txt.split()[-1]} ({txt.rsplit(' ', 1)[0]})", "flat"
+    cls = "neutral" if better is None else ("good" if up == (better == "up") else "bad")
+    return txt, cls
 
 
-# ---------------------------------------------------------------- key finding and implications
+def chg(p, kind, better=None, noun=""):
+    t, c = change_text(p, kind, better, noun)
+    tip = (f' title="{UNCLEAR_TIP}"' if t.startswith("No clear") else
+           ' title="Percentage points: the difference between the two percentages"' if kind == "pp" else "")
+    return f'<span class="chg2 {c}"{tip}>{t}</span>'
+
+
+def compare_line(a, b, show_base=True):
+    """'Baseline 95% → Your Scenario 93%' (stacks on narrow screens)."""
+    if not show_base:
+        return f'<div class="cmpv"><span class="ls">Your Scenario</span><b class="sv">{b}</b></div>'
+    return (f'<div class="cmpv"><span class="lb">Baseline</span><b>{a}</b><span class="ar" aria-hidden="true">→</span>'
+            f'<span class="ls">Your Scenario</span><b class="sv">{b}</b></div>')
+
+
+# ---------------------------------------------------------------- capacity state and findings
 def _state(s, res, name, beds):
     """Capacity state of one run, from its own outputs."""
     if not waits_ok(res, name):
@@ -1207,74 +1332,67 @@ def _state(s, res, name, beds):
     return "ok"
 
 
-def key_finding(s, res):
-    """(headline, supporting sentence) from this run's numbers and run-to-run variation; never fixed wording."""
+def capacity_answer(s, res):
+    """(icon, finding, evidence [(value, label)], context) for 'Could the Hospital Manage This Demand?'.
+    Evidence: average occupancy, share of bed requests that waited, average wait across ALL bed requests."""
     st_ = _state(s, res, "Scenario", s["beds"])
     occ = run_mean(res, "Scenario", "occupancy_pct")
     full = full_day_share(res, "Scenario", s["beds"])
+    nb = float(np.mean(res["nb_vals"]["Scenario"]))
+    waited = run_mean(res, "Scenario", "waited_pct")
+    mw = run_mean(res, "Scenario", "mean_wait_days")
+    ev = [(f"{occ:.0f}%", "average bed occupancy")]
     if st_ == "overloaded":
-        head = ("Demand exceeded the available beds: some patients were still waiting for a bed long after the "
-                "period ended.")
-    elif st_ == "full":
+        us = run_mean(res, "Scenario", "unresolved_requests")
+        ev += [(f"{full * 100:.0f}%", "of days with every bed full"),
+               (f"{us:,.0f}", f"requests still waiting {TAIL_DAYS} days after the period")]
+        return ("warn", "Hospital capacity was insufficient: demand exceeded the available beds and some patients "
+                        "were still waiting long after the period ended.", ev, "")
+    ev += [(fmt_pct(waited), "of bed requests waited at least one day"),
+           (fmt_wait(mw), "average wait across all bed requests")]
+    if st_ == "full":
         when = "throughout the period" if full >= 0.999 else ("for most of the period" if full >= 0.5 else "on average")
-        head = (f"Beds were fully occupied {when}, and {RH.fmt_pct_small(run_mean(res, 'Scenario', 'waited_pct'))} "
-                f"of bed requests had to wait (average {_days(run_mean(res, 'Scenario', 'mean_wait_days'))} per "
-                "request).")
-    elif st_ == "busy":
-        head = (f"Beds were {occ:.0f}% occupied on an average day, and {RH.fmt_pct_small(run_mean(res, 'Scenario', 'waited_pct'))} "
-                "of bed requests waited at least a day.")
-    else:
-        w = run_mean(res, "Scenario", "waited_pct")
-        head = (f"The hospital managed the demand: beds were {occ:.0f}% occupied on an average day and "
-                + ("almost no one had to wait for a bed." if w < 1 else f"{RH.fmt_pct_small(w)} of bed requests waited."))
-    case = RH.scenario_case(s)
-    if case == "none":
-        return head, "This is the reference scenario, so there is nothing to compare it with yet."
-    support = []
-    ref_state = _state(s, res, "Reference", s["ref_beds"])
-    if case in ("conditions", "combined"):
-        what = _cond_phrase(s)
-        w = pair(res, "Reference", "Scenario", "mean_wait_days") if waits_ok(res, "Reference", "Scenario") else None
-        if ref_state in ("full", "overloaded") and st_ in ("full", "overloaded"):
-            support.append(f"The reference was already at capacity in this period, so {what} mainly changed how long "
-                           "patients waited rather than occupancy.")
-        if w is None:
-            if st_ == "overloaded" and ref_state != "overloaded":
-                support.append(f"With {what}, the beds could no longer keep up, unlike in the reference.")
-        elif w["clear"]:
-            support.append(f"With {what}, the average wait {'rose' if w['diff'] > 0 else 'fell'} from {_days(w['a'])} "
-                           f"to {_days(w['b'])} compared with the reference.")
-        elif ref_state == "ok" and st_ == "ok":
-            support.append(f"With {what}, waiting stayed low, as in the reference.")
-        else:
-            support.append(f"With {what}, waiting did not clearly change compared with the reference.")
-    if case in ("improve", "combined"):
-        support.append(improvement_sentence(s, res))
-    return head, " ".join(x for x in support if x)
+        head = ("Hospital capacity was insufficient to meet demand without substantial waiting." if waited >= 20 else
+                f"Beds were full {when}, and some patients had to wait for a bed.")
+        return ("warn", head, ev, f"Every bed was in use on {full * 100:.0f}% of days.")
+    if st_ == "busy":
+        return ("warn", "Capacity was tight: the hospital managed most of the demand, but a noticeable share of "
+                        "patients waited for a bed.", ev, "")
+    if nb > s["beds"]:
+        return ("mixed", "The hospital mostly managed the demand, with little room to spare on busy days.", ev,
+                f"Estimated busy-day demand ({nb:,.0f} beds) was above the {s['beds']:,} available, so short peaks "
+                "may still cause waits.")
+    return ("ok", "The hospital generally managed the simulated demand.", ev, "")
 
 
-def improvement_sentence(s, res):
-    """What the targeted improvements added, from the matching run without them (never the combined effect)."""
-    comp = RH.improvement_comparator(s)
-    bd = pair_unlimited(res, comp, "Scenario", "bd")
-    rt = pair(res, comp, "Scenario", "returns") if s["readmit"] else None
-    w = pair(res, comp, "Scenario", "mean_wait_days") if waits_ok(res, comp, "Scenario") else None
-    gains = []
-    if rt and rt["clear"] and rt["diff"] < 0:
-        gains.append(f"reduced readmissions by about {-rt['diff']:,.0f}")
-    if bd and bd["clear"] and bd["diff"] < 0:
-        gains.append(f"lowered bed-day demand by about {-bd['diff']:,.0f} bed-days over {s['duration']} days")
-    imp = f"The patient-flow improvements for {_patients(s)}"
-    if not gains:
-        return f"{imp} made no clear difference in this simulation."
-    txt = f"{imp} {' and '.join(gains)}"
-    if w is None:
-        return txt + "."
-    if w["clear"] and w["diff"] < 0:
-        return txt + f", and shortened the average wait by {-w['diff']:.2f} days."
-    if _state(s, res, comp, s["beds"]) == "ok":
-        return txt + ", while waiting was already low."
-    return txt + ", but did not clearly reduce waiting under these capacity conditions."
+def baseline_change_sentence(s, res):
+    """How the scenario's waiting differed from the baseline (demand/bed changes), or None."""
+    if RH.scenario_case(s) not in ("conditions", "combined"):
+        return None
+    what = _cond_phrase(s)
+    if not waits_ok(res, "Reference", "Scenario"):
+        if not waits_ok(res, "Scenario") and waits_ok(res, "Reference"):
+            return f"With {what}, the beds could no longer keep up, unlike in the baseline."
+        return f"With {what}, waiting could not be fully estimated in at least one of the two scenarios."
+    metric, w = wait_compare(res, "Reference", "Scenario")
+    ref_state, st_ = _state(s, res, "Reference", s["ref_beds"]), _state(s, res, "Scenario", s["beds"])
+    if not w["clear"] or abs(w["diff"]) < (0.05 if metric == "waited_pct" else 0.005):
+        return (f"With {what}, waiting stayed low, as in the baseline." if ref_state == st_ == "ok"
+                else f"With {what}, there was no clear difference in waiting compared with the baseline.")
+    if metric == "mean_wait_days":
+        return (f"Almost every request waited in both scenarios; with {what}, the average wait "
+                f"{'rose' if w['diff'] > 0 else 'fell'} from {fmt_wait(w['a'])} in the baseline to {fmt_wait(w['b'])}.")
+    return (f"With {what}, the share of bed requests that waited {'rose' if w['diff'] > 0 else 'fell'} from "
+            f"{fmt_pct(w['a'])} in the baseline to {fmt_pct(w['b'])}.")
+
+
+def wait_compare(res, a, b):
+    """Which waiting measure shows the difference: share that waited, or, when nearly every request waited in both
+    runs (the share is saturated near 100%), the average wait in days."""
+    wp = pair(res, a, b, "waited_pct")
+    if wp["a"] >= 95 and wp["b"] >= 95:
+        return "mean_wait_days", pair(res, a, b, "mean_wait_days")
+    return "waited_pct", wp
 
 
 def _cond_phrase(s):
@@ -1286,126 +1404,213 @@ def _cond_phrase(s):
     return " and ".join(bits)
 
 
-def capacity_plan_points(s, res):
-    """'What This Means for Your Capacity Plan': two or three statements, each tied to this run's numbers."""
+def improvement_headline(s, res):
+    """One-line answer to 'How much did the targeted patient-flow changes help?' (matching runs only)."""
+    comp = RH.improvement_comparator(s)
+    bd = pair_unlimited(res, comp, "Scenario", "bd")
+    rt = pair(res, comp, "Scenario", "returns") if s["readmit"] else None
+    metric, w = wait_compare(res, comp, "Scenario") if waits_ok(res, comp, "Scenario") else (None, None)
+    gains = []
+    if rt and rt["clear"] and rt["diff"] < -0.5:
+        gains.append(f"about {-rt['diff']:,.0f} fewer readmissions")
+    if bd and bd["clear"] and bd["diff"] < -0.5:
+        gains.append(f"about {-bd['diff']:,.0f} fewer bed-days of demand over {s['duration']} days")
+    if not gains:
+        return "The improvements made no clear difference in this simulation."
+    txt = "The improvements led to " + " and ".join(gains)
+    if w is None:
+        return txt + "."
+    if metric == "mean_wait_days" and w["clear"] and w["diff"] < -0.005:
+        return txt + f", and the average wait fell from {fmt_wait(w['a'])} to {fmt_wait(w['b'])}."
+    if metric == "waited_pct" and w["clear"] and w["diff"] < -0.05:
+        return txt + f", and the share of requests that waited fell by {-w['diff']:.1f} percentage points."
+    if _state(s, res, comp, s["beds"]) == "ok":
+        return txt + "; waiting was already low."
+    return txt + ", but waiting did not clearly change."
+
+
+def decision_insights(s, res):
+    """(key, finding, why it matters, scenario to test, action) — action = (label, cfg update, flow flag) or a tab."""
     out = []
     st_ = _state(s, res, "Scenario", s["beds"])
-    nb = pair_unlimited(res, "Reference", "Scenario", "nb")
-    over = nb["b"] - s["beds"]
-    if st_ in ("overloaded", "full", "busy") and over > 0:
-        out.append(f"On busy days this scenario would need about {nb['b']:,.0f} beds without a bed limit, "
-                   f"{over:,.0f} more than the {s['beds']:,} available. Testing more beds would show how much waiting "
-                   "could fall.")
-    elif st_ in ("overloaded", "full", "busy"):
-        out.append("Waiting occurred even though busy-day demand stayed close to the available beds; demand varies "
-                   "from day to day, so short peaks can still fill every bed.")
-    elif nb["b"] < 0.95 * s["beds"]:
-        out.append(f"There was spare capacity: busy-day demand reached about {nb['b']:,.0f} beds, below the "
-                   f"{s['beds']:,} available. Testing higher demand or fewer beds would show how much headroom "
-                   "remains.")
+    nb = float(np.mean(res["nb_vals"]["Scenario"]))
+    more = int(round(s["beds"] * 1.10 / 10) * 10)
+    if st_ in ("overloaded", "full", "busy"):
+        out.append(("beds", "Busy-day demand is above the available beds." if nb > s["beds"] else
+                    "Short peaks in admissions fill every bed.",
+                    "Patients wait when demand peaks, and waiting can carry over into the following days.",
+                    "More available beds", (f"Test More Available Beds ({more:,})",
+                                            dict(bed_mode="custom", custom_beds=more), None)))
+    elif nb >= 0.95 * s["beds"]:
+        nd = min(s["demand"] + 10, PCT_CHOICES["demand"]["hi"])
+        out.append(("demand", "There is limited room for higher demand.",
+                    f"Busy-day demand ({nb:,.0f} beds) is close to the {s['beds']:,} available, so a rise in "
+                    "admissions could quickly lead to waiting.",
+                    "Higher admission demand", (f"Test Higher Admission Demand ({nd:+d}%)", dict(demand=nd), None)))
     else:
-        out.append(f"Busy-day demand (about {nb['b']:,.0f} beds) is close to the {s['beds']:,} available, so "
-                   "small increases in demand could start to cause waiting.")
+        nd = min(s["demand"] + 10, PCT_CHOICES["demand"]["hi"])
+        out.append(("ok", "There was spare capacity on busy days.",
+                    f"Busy-day demand ({nb:,.0f} beds) stayed below the {s['beds']:,} available beds.",
+                    "Higher demand or fewer beds", (f"Test Higher Admission Demand ({nd:+d}%)", dict(demand=nd), None)))
+    case = RH.scenario_case(s)
+    if case in ("conditions", "combined") and waits_ok(res, "Reference", "Scenario"):
+        metric, w = wait_compare(res, "Reference", "Scenario")
+        if w["clear"] and abs(w["diff"]) >= (0.5 if metric == "waited_pct" else 0.05):
+            worse = w["diff"] > 0
+            what = _cond_phrase(s)
+            out.append(("wait", f"{what[0].upper() + what[1:]} {'increased' if worse else 'reduced'} waiting.",
+                        (f"The share of bed requests that waited went from {fmt_pct(w['a'])} in the baseline to "
+                         f"{fmt_pct(w['b'])}." if metric == "waited_pct" else
+                         f"The average wait went from {fmt_wait(w['a'])} in the baseline to {fmt_wait(w['b'])}."),
+                        "Compare it with another plan", ("Compare Another Plan", "compare", None)))
     if s["reduction"] or s["readmit"]:
         comp = RH.improvement_comparator(s)
         bd = pair_unlimited(res, comp, "Scenario", "bd")
-        share = H.page_measures(s["diagnosis"], s["severity"], s["age"])["share_total"]
-        if bd and bd["clear"] and bd["diff"] < 0:
-            out.append(f"The improvements lowered bed-day demand by about {-bd['diff'] / s['duration']:,.0f} beds on "
-                       "an average day. "
-                       + ("Because beds stayed full, waiting patients used the freed beds, so occupied beds did not "
-                          "fall." if st_ in ("full", "overloaded") else "That is capacity other admissions could use."))
+        nr = min(s["reduction"] + 5, PCT_CHOICES["reduction"]["hi"]) if s["reduction"] else 10
+        if bd and bd["clear"] and bd["diff"] < -0.5:
+            meaning = ("Beds stayed full, so the freed beds went to waiting patients: the benefit shows as shorter "
+                       "waits rather than empty beds." if st_ in ("full", "overloaded") else
+                       "That frees capacity that other admissions could use.")
+            out.append(("flow", f"The patient-flow changes lowered bed demand by about "
+                                f"{-bd['diff'] / s['duration']:,.0f} beds on an average day.", meaning,
+                        "A different improvement level (hypothetical)",
+                        (f"Test a Larger Stay Reduction ({nr}%)", dict(reduction=nr), True)))
         else:
-            out.append(f"The selected group accounts for about {share:.0f}% of historical bed-days, so changes to this "
-                       "group alone have a limited hospital-wide effect. A larger change or another group may matter "
-                       "more.")
-    if s["readmit"] and group_return_rate(s["diagnosis"], s["severity"]) == 0:
-        out.append("This group has no recorded readmissions, so reducing readmissions has no effect in the model.")
+            share = H.page_measures(s["diagnosis"], s["severity"], s["age"])["share_total"]
+            out.append(("flow", "The patient-flow changes had little measurable effect.",
+                        f"This group accounts for about {share:.0f}% of historical bed-days, so changes to it alone "
+                        "have a limited hospital-wide effect.", "Another patient group or a larger change",
+                        ("Explore Patient Groups", "groups", None)))
     return out[:3]
 
 
-# ---------------------------------------------------------------- 03 impact
-def _row(label, p, unit, dp, better, pts=False, fmt=None):
-    f = fmt or (lambda v: f"{v:,.{dp}f}{(' ' + unit) if unit and not pts else ''}{'%' if pts else ''}")
-    if p is None:
-        return f'<div class="ir"><span>{label}</span><b>Not estimable</b><b></b>{dchip(None)}</div>'
-    return (f'<div class="ir"><span>{label}</span><b>{f(p["a"])}</b><b>{f(p["b"])}</b>'
-            f'{dchip(p, unit, dp, better, pts)}</div>')
+# ---------------------------------------------------------------- KPI groups
+ICON = {"ok": "check_circle", "warn": "warning", "mixed": "radio_button_partial"}
 
 
-def effect_table(s, res, a, b, a_name, b_name, include_flow=False):
-    ok = waits_ok(res, a, b)
-    rows = [_row("Average wait for a bed", pair(res, a, b, "mean_wait_days") if ok else None, "days", 2, "down",
-                 fmt=_days),
-            _row("Bed requests that waited", pair(res, a, b, "waited_pct") if ok else None, "", 1, "down", pts=True),
-            _row("Estimated busy-day bed demand", pair_unlimited(res, a, b, "nb"), "beds", 0, "down"),
-            _row("Bed-day demand (before the bed limit)", pair_unlimited(res, a, b, "bd"), "", 0, "down"),
-            _row("Occupied bed-days", pair(res, a, b, "bed_days"), "", 0, None)]
-    if include_flow:
-        if s["reduction"]:
-            rows.insert(0, _row(f"Average initial stay, {_group_phrase(s)} patients", pair(res, a, b, "target_mean_los"),
-                                "days", 2, "down"))
-        if s["readmit"]:
-            rows.insert(0, _row("Readmissions scheduled (all patients)", pair(res, a, b, "returns"), "", 0, "down"))
-    return (f'<div class="itab"><div class="ir ih"><span></span><b>{a_name}</b><b>{b_name}</b><em>Change</em></div>'
-            + "".join(rows) + "</div>")
-
-
-def breakdown_simple(s, res):
-    """Each change on its own, in plain words; the ± statistics stay in Detailed Simulation Results."""
-    reps = res["reps"]
-    others = [x for x in ("Demand only", "LOS only", "Readmissions only") if x in set(reps.scenario)]
-    if not others:
-        return False
+# ---------------------------------------------------------------- 03 improvements
+def flow_table(s, res):
+    comp = RH.improvement_comparator(s)
     rows = []
-    for sc in others + ["Scenario"]:
-        bd = pair(res, "Baseline", sc, "bed_days")
-        w = pair(res, "Baseline", sc, "mean_wait_days") if waits_ok(res, "Baseline", sc) else None
-        if w and w["clear"]:
-            short = "Adds pressure" if w["diff"] > 0 else "Eases pressure"
-        elif w is None:
-            short = "Waiting not estimable"
+
+    def row(label, p, kind, better, fa, noun=""):
+        if p is None:
+            rows.append(f'<div class="ir"><span>{label}</span><b>Not estimable</b><b>Not estimable</b>'
+                        f'{chg(None, kind)}</div>')
         else:
-            short = "No clear effect on waiting"
-        rows.append(f'<div class="ir"><span>{RH.LEVER_NAMES[sc]}</span>'
-                    f'{dchip(bd, "bed-days", 0, None)}{dchip(w, "days", 2, "down")}<em>{short}</em></div>')
-    UI.md('<div class="rsub">Each change on its own</div>'
-          '<div class="itab four"><div class="ir ih"><span></span><b>Occupied bed-days</b><b>Average wait</b>'
-          '<em>In short</em></div>' + "".join(rows) + "</div>"
-          f'<p class="rnote">Each run is compared with no changes and the same {s["beds"]:,} beds. “No clear difference” '
-          'means the change was within the variation between simulation runs. Separate effects need not add up to the '
-          'combined effect because all patients share the same beds.</p>')
-    return True
+            rows.append(f'<div class="ir"><span>{label}</span><b>{fa(p["a"])}</b><b>{fa(p["b"])}</b>'
+                        f'{chg(p, kind, better, noun)}</div>')
+    if s["reduction"]:
+        row(f"Average initial stay, {_group_phrase(s)} patients", pair(res, comp, "Scenario", "target_mean_los"),
+            "days", "down", lambda v: f"{v:.2f} days")
+    if s["readmit"]:
+        row("Readmissions scheduled (all patients)", pair(res, comp, "Scenario", "returns"), "count", "down",
+            lambda v: f"{v:,.0f}", "readmissions")
+    row("Bed-day demand (before the bed limit)", pair_unlimited(res, comp, "Scenario", "bd"), "bed-days", "down",
+        lambda v: f"{v:,.0f}")
+    ok = waits_ok(res, comp, "Scenario")
+    metric, wp = wait_compare(res, comp, "Scenario") if ok else ("waited_pct", None)
+    if metric == "mean_wait_days":                   # nearly everyone waited in both runs: the average wait shows it
+        row("Average wait for a bed (all requests)", wp, "days", "down", fmt_wait)
+    else:
+        row("Bed requests that waited", wp, "pp", "down", fmt_pct)
+    if len(rows) < 4:
+        row("Estimated beds needed on busy days", pair_unlimited(res, comp, "Scenario", "nb"), "beds", "down",
+            lambda v: f"{v:,.0f}")
+    left = "Without improvements" if RH.scenario_case(s) == "combined" else "Baseline Scenario"
+    return (f'<div class="itab"><div class="ir ih"><span></span><b>{left}</b><b>With improvements</b>'
+            '<em>Difference</em></div>' + "".join(rows) + "</div>")
 
 
-def impact_section(s, res):
-    case = RH.scenario_case(s)
-    if case == "none":
-        UI.md('<p class="qsub">No planning changes were made, so there is no effect to show. Try one of the options '
-              'below.</p>')
+# ---------------------------------------------------------------- saved options
+def save_current():
+    """Store this run's exact settings, outputs and timestamp under a stable id (never modified by later edits;
+    the same completed run is never saved twice)."""
+    if ss.result is None or any(x["key"] == ss.result["key"] for x in ss.saved):
         return
-    if case in ("conditions", "combined"):
-        UI.md('<div class="rsub">Overall Scenario Effect</div><p class="rlead">Your full scenario compared with the '
-              'reference.</p>' + effect_table(s, res, "Reference", "Scenario", "Reference", "Your Scenario",
-                                              include_flow=case == "combined"))
-    if case in ("improve", "combined"):
-        comp = RH.improvement_comparator(s)
-        lead = ("To understand their effect, we compared your scenario with the same demand and bed settings but "
-                "without the improvements." if case == "combined" else
-                "Demand and beds were not changed, so the improvements are compared directly with the reference.")
-        UI.md('<div class="rsub">Did Patient Flow Improvements Help?</div>'
-              f'<p class="rlead">{lead}</p>'
-              + effect_table(s, res, comp, "Scenario", "Without Improvements" if case == "combined" else "Reference",
-                             "With Improvements", include_flow=True))
-        if _state(s, res, "Scenario", s["beds"]) in ("full", "overloaded"):
-            UI.md('<p class="rnote">Beds stayed full, so beds freed by shorter stays or fewer readmissions were taken by '
-                  'waiting patients: occupied bed-days cannot fall. Bed-day demand and waiting show the effect '
-                  'instead.</p>')
-    breakdown_simple(s, res)
-    with st.expander("Detailed Simulation Results"):
-        breakdown_table(s, res)
-        results_stats(s)
+    st_s, res = copy.deepcopy(ss.result["settings"]), ss.result["res"]
+    R = results_view(ss.result)
+    rec = RH.compare_record(R, st_s, ss.result["bed_mode"])
+    ok = waits_ok(res, "Scenario")
+    ss.saved_seq += 1
+    rec.update(id=ss.saved_seq, key=ss.result["key"], settings=st_s, generated=fmt_generated(ss.result),
+               finished_at=ss.result.get("finished_at"), question=scenario_question(st_s),
+               baseline=baseline_text(st_s), state=_state(st_s, res, "Scenario", st_s["beds"]),
+               occ=run_mean(res, "Scenario", "occupancy_pct"),
+               wait=run_mean(res, "Scenario", "mean_wait_days") if ok else None,
+               waited=run_mean(res, "Scenario", "waited_pct") if ok else None,
+               queue=run_mean(res, "Scenario", "peak_queue"),
+               nb=float(np.mean(res["nb_vals"]["Scenario"])),
+               bd_day=float(np.mean(res["bd_demand"]["Scenario"])) / st_s["duration"],
+               returns_day=run_mean(res, "Scenario", "returns") / st_s["duration"],
+               target_los=run_mean(res, "Scenario", "target_mean_los") if st_s["reduction"] else None)
+    ss.saved = (ss.saved + [rec])[-MAX_SAVED:]
 
+
+STATE_LABEL = {"ok": ("Managed demand", "good"), "busy": ("Some waiting", "warn"), "full": ("At capacity", "bad"),
+               "overloaded": ("Demand exceeded beds", "bad")}
+
+
+def _opt_settings(r):
+    s = r["settings"]
+    return [("Planning period", f"{s['duration']} days · " + ("typical week" if s["season"] == "Annual average"
+                                                              else f"from {H.MONTH_FULL[s['season']]}")),
+            ("Admission demand", "Historical (0%)" if not s["demand"] else f"{s['demand']:+d}%"),
+            ("Available beds", f"{s['beds']:,}"),
+            ("Targeted improvements", (f"{_group_phrase(s)}: {_imp_list(s, initial=False)}"
+                                       if (s["reduction"] or s["readmit"]) else "None"))]
+
+
+def comparison_matrix(recs):
+    """Saved options side by side, settings first; differences against Option A only when they are not trivial."""
+    base = recs[0]
+
+    def diff(r, key, kind, better, noun=""):
+        if r is base or r.get(key) is None or base.get(key) is None:
+            return ""
+        d = r[key] - base[key]
+        small = abs(d) < (0.5 if kind == "pp" else 0.05 if kind == "days" else max(1.0, 0.01 * abs(base[key])))
+        if small:
+            return f'<div class="mdiff">About the same as {base["title"]}</div>'
+        t, c = change_text(dict(a=base[key], b=r[key], diff=d, half=0.0, clear=True), kind, better, noun)
+        return f'<div class="mdiff {c}">{t} than {base["title"]}</div>'
+
+    head = "".join(f'<th scope="col"><div class="mo">{UI.esc(r["title"])}</div><div class="mq">{UI.esc(r["question"])}</div>'
+                   f'<div class="mt">{UI.esc(r.get("generated", ""))}</div></th>' for r in recs)
+    rows = ['<tr class="grp"><th colspan="99">Scenario Settings</th></tr>']
+    for i, (label, _) in enumerate(_opt_settings(base)):
+        vals = [_opt_settings(r)[i][1] for r in recs]
+        same = len(set(vals)) == 1
+        rows.append(f'<tr{" class=same" if same else ""}><th scope="row">{label}</th>'
+                    + "".join(f"<td>{UI.esc(v)}</td>" for v in vals) + "</tr>")
+    rows.append('<tr class="grp"><th colspan="99">Capacity Outcomes</th></tr>')
+    lab = lambda r: '<span class="st {1}">{0}</span>'.format(*STATE_LABEL.get(r["state"], ("", "")))
+    rows.append('<tr><th scope="row">Overall</th>' + "".join(f"<td>{lab(r)}</td>" for r in recs) + "</tr>")
+    for label, key, fmt, kind, better, noun in (
+            ("Average occupancy", "occ", lambda v: f"{v:.0f}%", "pp", None, ""),
+            ("Estimated beds needed on busy days", "nb", lambda v: f"{v:,.0f}", "beds", "down", ""),
+            ("Bed requests that waited", "waited", fmt_pct, "pp", "down", ""),
+            ("Average wait (all requests)", "wait", fmt_wait, "days", "down", ""),
+            ("Largest daily queue", "queue", lambda v: f"{v:,.0f}", "count", "down", "requests waiting")):
+        rows.append(f'<tr><th scope="row">{label}</th>' + "".join(
+            f'<td><b>{"Not estimable" if r.get(key) is None else fmt(r[key])}</b>{diff(r, key, kind, better, noun)}</td>'
+            for r in recs) + "</tr>")
+    rows.append('<tr class="grp"><th colspan="99">Improvement Outcomes</th></tr>')
+    rows.append('<tr><th scope="row">Average bed demand per day (before the bed limit)</th>' + "".join(
+        f'<td><b>{r["bd_day"]:,.0f}</b>{diff(r, "bd_day", "beds", "down")}</td>' for r in recs) + "</tr>")
+    if any(r["settings"]["readmit"] for r in recs) and all("returns_day" in r for r in recs):
+        rows.append('<tr><th scope="row">Readmissions scheduled per day</th>' + "".join(
+            f'<td><b>{r["returns_day"]:,.1f}</b></td>' for r in recs) + "</tr>")
+
+    def los_cell(r):
+        if r.get("target_los") is None:
+            return "—"
+        return f"{r['target_los']:.2f} days ({UI.esc(_group_phrase(r['settings']))})"
+    if any(r.get("target_los") is not None for r in recs):
+        rows.append('<tr><th scope="row">Average initial stay, target group</th>'
+                    + "".join(f"<td>{los_cell(r)}</td>" for r in recs) + "</tr>")
+    return (f'<div class="mwrap"><table class="cmpmx"><thead><tr><th></th>{head}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table></div>')
 
 
 def results_line(s):
@@ -1430,25 +1635,6 @@ def results_view(result):
     return RH.Results(s, view_of(res, comparator(s)))
 
 
-def save_current():
-    """Store this run's exact settings and the outcomes shown in Compare Your Options (never overwritten)."""
-    if ss.result is None or any(x["key"] == ss.result["key"] for x in ss.saved):
-        return
-    st_s, res = ss.result["settings"], ss.result["res"]
-    R = results_view(ss.result)
-    rec = RH.compare_record(R, st_s, ss.result["bed_mode"])
-    ok = waits_ok(res, "Scenario")
-    rec.update(key=ss.result["key"], finished=ss.result["finished"],
-               sentences=scenario_sentences(st_s), state=_state(st_s, res, "Scenario", st_s["beds"]),
-               occ=run_mean(res, "Scenario", "occupancy_pct"),
-               wait=run_mean(res, "Scenario", "mean_wait_days") if ok else None,
-               waited=run_mean(res, "Scenario", "waited_pct") if ok else None,
-               nb=float(np.mean(res["nb_vals"]["Scenario"])))
-    ss.saved_seq += 1
-    rec["title"] = f"Option {chr(64 + ((ss.saved_seq - 1) % 26) + 1)}"
-    ss.saved = (ss.saved + [rec])[-MAX_SAVED:]
-
-
 def remove_saved(key):
     ss.saved = [x for x in ss.saved if x["key"] != key]
 
@@ -1458,21 +1644,24 @@ def breakdown_table(s, res):
     others = [x for x in ("LOS only", "Demand only", "Readmissions only") if x in set(reps.scenario)]
     if not others:
         return
-    st.markdown("**Each change on its own, with 95% intervals**")
+    st.markdown(f"**Each change on its own** — every run uses the same {s['beds']:,} beds as your scenario and is "
+                "compared with a run with no changes and those beds")
     sub = reps[reps.scenario.isin(["Baseline", "Scenario", *others])]
     eff = S.paired_effects(sub, ["bed_days", "mean_wait_days", "returns"], versus="Baseline")
     rows = []
     for sc in others + ["Scenario"]:
-        r = {"Run": RH.LEVER_NAMES[sc]}
-        for label, key, dp in (("Bed-days", "bed_days", 0), ("Average wait (days)", "mean_wait_days", 2),
-                               ("Readmissions", "returns", 0)):
+        r = {"Change tested": RH.LEVER_NAMES[sc]}
+        for label, key, dp in (("Occupied bed-days", "bed_days", 0), ("Average wait (days)", "mean_wait_days", 2),
+                               ("Readmissions scheduled", "returns", 0)):
             e = eff[(eff.scenario == sc) & (eff.metric == key)].iloc[0]
-            r[label] = (f"{e['diff']:+,.{dp}f} ± {e['ci95']:,.{dp}f}" + ("" if e["clear"] else " *")
+            r[label] = ((f"{e['diff']:+,.{dp}f} ± {e['ci95']:,.{dp}f}" if e["clear"] else
+                         f"No clear difference ({e['diff']:+,.{dp}f} ± {e['ci95']:,.{dp}f})")
                         if RH.finite(e["diff"]) else "Not estimable")
         rows.append(r)
     st.dataframe(pd.DataFrame(rows), hide_index=True, **DF_KW)
-    st.caption(f"Each run compared with no changes and the same {s['beds']:,} beds. * within simulation noise. Separate "
-               "effects need not add up to the combined effect because all patients share the same beds.")
+    st.caption("Occupied bed-days are capped by the beds available, so at full capacity they barely change even when "
+               "demand falls; waiting shows the pressure instead. Separate effects need not add up to the combined "
+               "effect because all patients share the same beds.")
 
 
 def try_next(cfg_update, flow=None):
@@ -1518,26 +1707,436 @@ def next_ideas(s, res):
     return ideas[:3]
 
 
-def differences(s):
-    """Settings of the run next to the reference (shown in View Scenario Settings)."""
-    out = [("Planning Period", f"{s['duration']} days · " + ("Typical Week" if s["season"] == "Annual average"
-                                                             else f"starting in {H.MONTH_FULL[s['season']]}"), "same"),
-           ("Admission Demand", "No change" if not s["demand"] else f"{s['demand']:+d}%",
-            "same" if not s["demand"] else "changed"),
-           ("Available Beds", f"{s['beds']:,} (default {s['ref_beds']:,})" if s["beds"] != s["ref_beds"]
-            else f"{s['beds']:,} (default)", "same" if s["beds"] == s["ref_beds"] else "changed")]
-    if s["reduction"] or s["readmit"]:
-        out.append(("Patient Flow Improvements", f"{_group_phrase(s)}: {_imp_list(s)}", "changed"))
-    else:
-        out.append(("Patient Flow Improvements", "None", "same"))
-    out.append(("Simulation Runs", f"{s['reps']} runs · seed {s['seed']}", "same"))
+
+
+# ---------------------------------------------------------------- downloads (what the files really contain)
+def _tag(s):
+    return (f"{s['diagnosis']}{s['severity']}_{s['age'].replace(' ', '')}_los{s['reduction']}_dem{s['demand']:+d}"
+            f"_ret{s['readmit']}_{s['beds']}beds_{s['duration']}d_{s['season'].replace(' ', '')}")
+
+
+def _named(df):
+    out = df.copy()
+    out.insert(0, "run", out.scenario.map(RUN_LABELS).fillna(out.scenario))
     return out
+
+
+def summary_table(s, res):
+    """One row per measure: Baseline Scenario vs Your Scenario, run means, 95% interval half-widths and the paired
+    difference (the numbers behind the page)."""
+    rows = []
+    for name, key in (("Bed occupancy (%)", "occupancy_pct"), ("Average beds occupied", "avg_occupied"),
+                      ("Occupied bed-days", "bed_days"), ("Bed requests that waited (%)", "waited_pct"),
+                      ("Average wait, all requests (days)", "mean_wait_days"), ("Largest daily queue", "peak_queue"),
+                      ("Requests still waiting after follow-up", "unresolved_requests"),
+                      ("New admissions", "admissions"), ("Readmissions scheduled", "returns"),
+                      ("Average initial stay, target group (days)", "target_mean_los")):
+        (bm, bc), (sm, sc_) = M(key, "Baseline"), M(key, "Scenario")
+        d, ci, cl = E(key)
+        rows.append(dict(measure=name, baseline_mean=bm, baseline_ci95_halfwidth=bc, scenario_mean=sm,
+                         scenario_ci95_halfwidth=sc_, difference=d, difference_ci95_halfwidth=ci,
+                         clear_difference=bool(cl) if RH.finite(d) else None))
+    for name, key in (("Estimated beds needed on busy days (p95, no bed limit)", "nb"),
+                      ("Bed-day demand before the bed limit", "bd")):
+        p = pair_unlimited(res, "Reference", "Scenario", key)
+        rows.append(dict(measure=name, baseline_mean=p["a"], baseline_ci95_halfwidth=None, scenario_mean=p["b"],
+                         scenario_ci95_halfwidth=None, difference=p["diff"], difference_ci95_halfwidth=p["half"],
+                         clear_difference=p["clear"]))
+    return pd.DataFrame(rows)
+
+
+def comparison_table(recs):
+    rows = []
+    for r in recs:
+        s = r["settings"]
+        rows.append(dict(option=r["title"], question=r["question"], generated=r.get("generated", ""),
+                         duration_days=s["duration"], admission_pattern=s["season"], demand_change_pct=s["demand"],
+                         available_beds=s["beds"], default_beds=s["ref_beds"],
+                         target_group=f"{s['diagnosis']}|{s['severity']}|{s['age']}" if (s["reduction"] or s["readmit"]) else "",
+                         shorter_stays_pct=s["reduction"], fewer_readmissions_pct=s["readmit"], runs=s["reps"], seed=s["seed"],
+                         avg_occupancy_pct=r["occ"], busy_day_beds_needed=r["nb"], requests_waited_pct=r["waited"],
+                         avg_wait_days_all_requests=r["wait"], largest_daily_queue=r["queue"],
+                         bed_day_demand_per_day=r["bd_day"], target_group_initial_stay_days=r.get("target_los")))
+    return pd.DataFrame(rows)
+
+
+def downloads(s, res, recs):
+    tag = _tag(s)
+    run_json = json.dumps(dict(interface_version=APP_VERSION, model_version=MODEL_VERSION,
+                               generated=fmt_generated(ss.result),
+                               generated_iso=(ss.result["finished_at"].isoformat() if ss.result.get("finished_at")
+                                              else None),
+                               settings=s, baseline=baseline_text(s), question=scenario_question(s),
+                               readmission_reduction_scope="selected patient group (condition, severity, age group)",
+                               warmup_days=S.WARMUP_DAYS, waiting_follow_up_days=S.TAIL_DAYS,
+                               historical_period=H.PERIOD_LABEL), indent=2, default=str)
+    files = [("Download Results Summary (CSV)",
+              "Baseline Scenario vs Your Scenario for each measure: averages over the runs, 95% interval half-widths "
+              "and the paired difference.", summary_table(s, res).to_csv(index=False), f"results_summary_{tag}.csv"),
+             ("Download Detailed Simulation Results (CSV)",
+              "One row per simulation run for every run behind this page (baseline, your scenario and comparison "
+              "runs). Simulated outputs only, no patient records.", _named(res["reps"]).to_csv(index=False),
+              f"simulation_runs_{tag}.csv"),
+             ("Download Daily Results (CSV)", "Beds in use, queue and cumulative admissions per day, averaged over runs.",
+              _named(res["daily"]).to_csv(index=False), f"daily_{tag}.csv"),
+             ("Download Scenario Settings (JSON)", "The settings, baseline and model assumptions behind these results.",
+              run_json, f"scenario_settings_{tag}.json"),
+             ("Download Data Dictionary (CSV)", "What each column in the CSV files means.",
+              RH.DATA_DICTIONARY.to_csv(index=False), "data_dictionary.csv")]
+    files = [(lab.replace("Download ", "").replace(" (CSV)", "").replace(" (JSON)", ""), d, data, name)
+             for lab, d, data, name in files]
+    with st.expander("Download Results"):
+        UI.md(f'<p class="rnote">All files describe the completed simulation generated {fmt_generated(ss.result)}, '
+              'not unsaved changes in Build a Scenario. They contain simulated results, not historical patient '
+              'records.</p>')
+        for i, (label, desc, data, name) in enumerate(files):
+            c1, c2 = st.columns([1.3, 2], vertical_alignment="center")
+            with c1:
+                st.download_button(label, data.encode("utf-8"), file_name=name,
+                                   mime="application/json" if name.endswith(".json") else "text/csv",
+                                   key=f"dl_{i}", type="tertiary", icon=":material/download:")
+            c2.markdown(f'<span class="rnote">{desc} ({name.rsplit(".", 1)[1].upper()} file)</span>', unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------- page
+WEEKDAY_NOTE = ("Bed demand follows the historical admission pattern. More admissions on busier days can increase "
+                "pressure on beds and create waiting that carries into later days.")
+
+
+def impact_tab(s, res):
+    case = RH.scenario_case(s)
+    comp = RH.improvement_comparator(s)
+    UI.md('<div class="tq2">What did the targeted patient-flow changes contribute?</div>'
+          f'<p class="ta">{UI.esc(improvement_headline(s, res))}</p>')
+    rate = group_return_rate(s["diagnosis"], s["severity"])
+    tested = [f"{s['reduction']}% shorter initial stays" if s["reduction"] else "",
+              f"{s['readmit']}% lower chance of readmission ({rate:.1f}% → {rate * (1 - s['readmit'] / 100):.1f}%)"
+              if s["readmit"] else ""]
+    vs = ("the same demand and beds as your scenario, without the improvements" if case == "combined" else
+          "the Baseline")
+    UI.md('<div class="wyt"><div class="wyh">What You Tested</div>'
+          f'<div class="wyg">{UI.esc(cond_label(s["diagnosis"]))} · Severity {s["severity"]} · '
+          f'{UI.esc(AGE_PICK[s["age"]])}</div><ul>' + "".join(f"<li>{UI.esc(x)}</li>" for x in tested if x)
+          + "</ul></div>"
+          f'<div class="wyh2">What Changed</div><p class="rlead">Your scenario compared with {vs}'
+          + (f" ({UI.esc(_cond_phrase(s))})" if case == "combined" else "") + ".</p>" + flow_table(s, res))
+    occ = pair(res, comp, "Scenario", "bed_days")
+    full = _state(s, res, "Scenario", s["beds"]) in ("full", "overloaded")
+    UI.md('<details class="why"><summary>Why do occupied bed-days hardly change?</summary><p><i>Bed-day demand</i> is '
+          'what patients would use with no bed limit. <i>Occupied bed-days</i> are capped by the available beds '
+          f'({occ["a"]:,.0f} → {occ["b"]:,.0f} here). The fall in demand only becomes extra admissions if patients '
+          'are waiting for those beds. '
+          + ("Here beds stayed full, so freed beds were taken by waiting patients; that does not mean the "
+             "improvement had no effect." if full else "") + "</p></details>")
+    reps = set(res["reps"].scenario)
+    if s["reduction"] and s["readmit"]:
+        if case == "improve" and {"LOS only", "Readmissions only"} <= reps:
+            rows = []
+            for sc, name in (("LOS only", "Shorter stays only"), ("Readmissions only", "Fewer readmissions only"),
+                             ("Scenario", "Both together")):
+                ok = waits_ok(res, "Baseline", sc)
+                metric, w = wait_compare(res, "Baseline", sc) if ok else ("waited_pct", None)
+                rt = pair(res, "Baseline", sc, "returns")
+                rows.append(f'<div class="ir"><span>{name}</span>{chg(rt, "count", "down", "readmissions")}'
+                            f'{chg(w, "pp" if metric == "waited_pct" else "days", "down")}<em></em></div>')
+            UI.md('<div class="rsub">Which Change Contributed What?</div><p class="rlead">Each run compared with the '
+                  'Baseline. Effects need not add up to the combined effect, because all patients share the same beds.</p>'
+                  '<div class="itab four"><div class="ir ih"><span></span><b>Readmissions scheduled</b>'
+                  '<b>Waiting</b><em></em></div>' + "".join(rows) + "</div>")
+        else:
+            UI.md('<p class="rnote">Both changes were tested together. Their separate effects were not simulated under '
+                  'your demand and bed settings, so only the combined effect is shown.</p>')
+
+
+def saved_options():
+    """Saved options in saved order, with visible labels Option A, B, C… assigned by current position."""
+    recs = [r for r in ss.saved if "settings" in r]
+    for i, r in enumerate(recs):
+        r["title"] = f"Option {chr(65 + i)}"
+    return recs
+
+
+def compare_tab(s, res, saved_now):
+    """Guided workflow: Save → Test Another Plan → Run → Save → Compare."""
+    recs = saved_options()
+    n = len(recs)
+    stage = 0 if n == 0 else (1 if n == 1 else 4)
+    steps = ["Save", "Test Another Plan", "Run", "Save", "Compare"]
+    UI.md('<div class="tq">Which plan is worth exploring further?</div><ol class="prog">' + "".join(
+        f'<li class="{"done" if i < stage or (i == 0 and saved_now) else ("now" if i == stage else "")}">{t}</li>'
+        for i, t in enumerate(steps)) + f'</ol><p class="rnote">{n} of {MAX_SAVED} plans saved.</p>')
+    cur = ss.result["key"]
+    UI.md('<div class="curplan"><span>Current results</span><b>' + UI.esc(scenario_question(s)) + '</b><em>'
+          + ("Saved as " + next(r["title"] for r in recs if r["key"] == cur) if saved_now else "Not saved yet")
+          + "</em></div>")
+    if n == 0:
+        UI.md('<div class="cmpstart"><div class="ch">Compare Different Capacity Plans</div><p>Save your current '
+              'scenario, then test another plan to compare their effects on capacity and waiting.</p></div>')
+    elif n == 1:
+        UI.md('<div class="cmpstart one"><div class="ch">1 plan saved — save one more to compare.</div>'
+              '<p>Test Another Plan opens Build a Scenario; your saved result stays here.</p></div>')
+    with st.container(key="cmpactions", horizontal=True, gap="small"):
+        st.button("Saved" if saved_now else "Save Current Scenario", key="cmp_add2", disabled=saved_now,
+                  type="secondary" if saved_now else "primary",
+                  icon=":material/check:" if saved_now else ":material/bookmark_add:", on_click=save_current)
+        st.button("Test Another Plan", key="cmp_test", type="primary" if saved_now else "secondary",
+                  icon=":material/arrow_forward:", icon_position="right", on_click=go_to, args=("simulator",))
+        st.button("Edit Scenario", key="res_edit2", type="tertiary", icon=":material/edit:", on_click=go_to,
+                  args=("simulator",))
+    if n >= 2:
+        durs = {(r["settings"]["duration"], r["settings"]["season"]) for r in recs}
+        if len(durs) > 1:
+            UI.md('<div class="satnote"><b>Different planning periods.</b> These plans use different durations or '
+                  'admission patterns, so totals are not directly comparable; the table uses percentages and per-day '
+                  'figures.</div>')
+        UI.md(comparison_matrix(recs))
+        UI.md(f'<p class="rnote">Differences are against {recs[0]["title"]}. The tool does not rank plans: weigh '
+              'waiting, busy-day demand and beds against what is feasible for your hospital.</p>')
+        st.download_button("Download Comparison (CSV)", comparison_table(recs).to_csv(index=False).encode("utf-8"),
+                           file_name="scenario_comparison.csv", mime="text/csv", key="dl_cmp", type="tertiary",
+                           icon=":material/download:")
+    if recs:
+        with st.container(key="cmprm", horizontal=True, gap="small"):
+            for r in recs:
+                st.button(f"Remove {r['title']}", key=f"cmp_rm_{r['id']}", type="tertiary", on_click=remove_saved,
+                          args=(r["key"],))
+    UI.md('<div class="rsub">Quick Plans to Test</div><p class="rlead">Each opens Build a Scenario with one change '
+          'applied for you to review; run the simulation there to see new results.</p>')
+    with st.container(key="resexplore", horizontal=True, gap="small"):
+        for i, (label, upd, fl) in enumerate(next_ideas(s, res)):
+            st.button(label, key=f"res_try_{i}", on_click=try_next, args=(upd, fl))
+
+
+def why(summary, text):
+    """Small expandable contextual note (used only where a chart could be misread)."""
+    return f'<details class="why"><summary>{summary}</summary><p>{text}</p></details>'
+
+
+RES_TABS = [("overview", "Overview", ":material/space_dashboard:"),
+            ("explore", "Explore Results", ":material/insights:"),
+            ("compare", "Compare Plans", ":material/compare_arrows:")]
+
+
+def goto_tab(tab, view=None):
+    """Switch the Results tab (and optionally the Explore view) and return to the top of the tab content."""
+    ss.ui["res_tab"] = tab
+    if view:
+        ss.ui["trend_view"] = view
+        ss.pop("w_ui_trend_view", None)
+    ss.scroll_to = "res-tabs"
+
+
+def summary_columns(s):
+    plan = [("Planning period", f"{s['duration']} days"),
+            ("Admission pattern", "Typical week" if s["season"] == "Annual average"
+             else f"Historical pattern starting in {H.MONTH_FULL[s['season']]}"),
+            ("Admission demand", "Historical level (0% change)" if not s["demand"] else
+             f"{s['demand']:+d}% vs historical level"),
+            ("Available beds", f"{s['beds']:,}" + (" (default)" if s["beds"] == s["ref_beds"] else
+                                                   f" (default {s['ref_beds']:,})"))]
+    if s["reduction"] or s["readmit"]:
+        flow = [("Target group", f"{cond_label(s['diagnosis'])} · Severity {s['severity']}"),
+                ("Age group", AGE_PICK[s["age"]]),
+                ("Shorter initial stays", f"{s['reduction']}% shorter" if s["reduction"] else "None"),
+                ("Readmission reduction", f"{s['readmit']}% lower chance" if s["readmit"] else "None")]
+    else:
+        flow = None
+    return plan, flow
+
+
+def bar_pair(label, a, b, fmt, scale_max, show_base, delta="", note="", cap=None):
+    """Baseline and Your Scenario as two labelled bars on one shared scale; optional capacity marker."""
+    def bar(cls, name, v):
+        w = 0 if scale_max <= 0 else min(100, 100 * v / scale_max)
+        return (f'<div class="bp"><span class="bn">{name}</span><div class="bt"><i class="{cls}" style="width:{w:.1f}%"></i>'
+                + (f'<em class="cap" style="left:{min(100, 100 * cap / scale_max):.1f}%" title="Available beds"></em>'
+                   if cap else "") + f'</div><b>{fmt(v)}</b></div>')
+    rows = (bar("b0", "Baseline", a) if show_base else "") + bar("b1", "Your Scenario", b)
+    return (f'<div class="cmpr"><div class="cl">{label}</div>{rows}'
+            + (f'<div class="cd">{delta}</div>' if delta else "") + (f'<div class="cnote">{note}</div>' if note else "")
+            + "</div>")
+
+
+def evidence_band(s, res, show_ref):
+    """Bed capacity and patient waiting, side by side, as compact comparisons."""
+    a, b = "Reference", "Scenario"
+    occ = pair(res, a, b, "occupancy_pct")
+    nb = pair_unlimited(res, a, b, "nb")
+    top = max(nb["a"], nb["b"], s["beds"], s["ref_beds"]) * 1.06
+    cap = (bar_pair("Average bed occupancy", occ["a"], occ["b"], lambda v: f"{v:.0f}%", 100, show_ref,
+                    chg(occ, "pp") if show_ref else "")
+           + bar_pair("Estimated beds needed on busy days " + _tip(
+                          "About how many beds would be needed on a busier day if everyone could be admitted without "
+                          "waiting. Not the beds actually occupied, and not an exact shortfall or a number of beds to "
+                          "add."), nb["a"], nb["b"], lambda v: f"{v:,.0f}", top, show_ref,
+                      chg(nb, "beds", "down") if show_ref else "",
+                      f'The dark marker shows the {s["beds"]:,} available beds. Beds actually in use can never exceed '
+                      'it; demand above it means patients wait.', cap=s["beds"]))
+    ok_b, ok_a = waits_ok(res, b), waits_ok(res, a)
+    if ok_b:
+        wp = pair(res, a, b, "waited_pct") if ok_a else None
+        qd = res["daily"]
+        qshare = {n: float((qd[qd.scenario == n].queue >= 1).mean()) * 100 for n in (a, b)}
+        q = pair(res, a, b, "peak_queue")
+        qtxt = (f"{q['a']:,.0f} → " if show_ref else "") + f"{q['b']:,.0f}"
+        dtxt = (f"{qshare[a]:.0f}% → " if show_ref else "") + f"{qshare[b]:.0f}%"
+        often = ('<div class="wq">How often did patients have to wait?</div>'
+                 + bar_pair("Bed requests that waited (of all requests)", run_mean(res, a, "waited_pct") or 0,
+                            run_mean(res, b, "waited_pct"), fmt_pct, 100, show_ref and ok_a,
+                            chg(wp, "pp", "down") if (show_ref and wp) else "")
+                 + '<div class="wmini"><span>Largest daily queue</span><b>' + qtxt + '</b>'
+                 + '<span>Days with patients waiting</span><b>' + dtxt + '</b></div>')
+        mw = pair(res, a, b, "mean_wait_days") if (show_ref and ok_a) else None
+        da, db = waited_delay(res, a), waited_delay(res, b)
+        mw_b = run_mean(res, b, "mean_wait_days")
+        top_w = max(run_mean(res, a, "mean_wait_days") or 0, mw_b, 0.1) * 1.1
+        long_ = ('<div class="wq">How long did they wait?</div>'
+                 + bar_pair("Average wait across all bed requests", run_mean(res, a, "mean_wait_days") or 0, mw_b,
+                            fmt_wait, top_w, show_ref and ok_a, chg(mw, "days", "down") if mw else "",
+                            "Most requests wait 0 days, so this average is small when few patients wait."
+                            if (run_mean(res, b, "waited_pct") or 0) < 5 else "")
+                 + '<div class="wmini"><span>Among patients who waited (approx.)</span><b>'
+                 + ("" if not show_ref else ("none → " if da is None else f"{da:.1f} → "))
+                 + ("none waited" if db is None else f"{db:.1f} days") + "</b></div>")
+        wait = often + long_
+    else:
+        us = run_mean(res, b, "unresolved_requests")
+        wait = (f'<div class="wq">How often did patients have to wait?</div><div class="cnote">Waiting could not be '
+                f'fully measured: about {us:,.0f} requests were still waiting {TAIL_DAYS} days after the period.</div>')
+    return (f'<div class="eband"><div class="ecol"><div class="eh">{ic("bed")}Bed Capacity</div>{cap}</div>'
+            f'<div class="ecol"><div class="eh">{ic("schedule")}Patient Waiting</div>{wait}</div></div>')
+
+
+def insight_action(i, action):
+    label, upd, fl = action
+    if upd == "compare":
+        st.button(label, key=f"ins_{i}", type="tertiary", icon=":material/arrow_forward:", icon_position="right",
+                  on_click=goto_tab, args=("compare",))
+    elif upd == "groups":
+        st.button(label, key=f"ins_{i}", type="tertiary", icon=":material/arrow_forward:", icon_position="right",
+                  on_click=to_explorer)
+    else:
+        st.button(label, key=f"ins_{i}", type="tertiary", icon=":material/arrow_forward:", icon_position="right",
+                  on_click=try_next, args=(upd, fl),
+                  help="Opens Build a Scenario with this change applied for you to review. Nothing runs until you "
+                       "press Run Simulation.")
+
+
+def overview_tab(s, res, saved):
+    case = RH.scenario_case(s)
+    flow = bool(s["reduction"] or s["readmit"])
+    with st.container(key="ovintro", horizontal=True, vertical_alignment="center", horizontal_alignment="distribute"):
+        UI.md('<div class="ovt"><div class="ovh">Your Capacity Overview</div><p>See whether the hospital could manage '
+              'demand, what changed, and what this means for planning.</p></div>')
+        st.button("Explore Detailed Results", key="ov_explore", icon=":material/arrow_forward:", icon_position="right",
+                  on_click=goto_tab, args=("explore",))
+    plan, fl = summary_columns(s)
+    col = lambda rows: "".join(f'<div class="kv"><span>{k}</span><b>{UI.esc(v)}</b></div>' for k, v in rows)
+    # stage 1 — the question
+    with st.container(key="stg_q"):
+        UI.md('<div class="stg">The Question</div>'
+              f'<div class="rq">{UI.esc(scenario_question(s))}</div>'
+              '<div class="scols"><div class="scol"><div class="sch">Hospital Planning Conditions</div>' + col(plan)
+              + '</div><div class="scol"><div class="sch">Patient Flow Improvements</div>'
+              + (col(fl) if fl else '<div class="snone">No patient-flow changes were tested.</div>') + '</div></div>'
+              '<div class="rbase"><b>Compared against the Baseline:</b> '
+              f'{UI.esc(baseline_text(s)[len("Baseline: "):])}</div>')
+    # stage 2 — the answer
+    icon, head, evidence, context = capacity_answer(s, res)
+    extra = baseline_change_sentence(s, res)
+    with st.container(key="stg_a"):
+        UI.md('<div class="stg">The Answer</div>'
+              f'<div class="hero2 {icon}"><div class="hh">{ic(ICON[icon])}<span>{UI.esc(head)}</span></div>'
+              '<div class="evid">' + "".join(f'<div><b>{UI.esc(v)}</b><span>{UI.esc(l)}</span></div>' for v, l in evidence)
+              + "</div>" + (f'<p class="hc">{UI.esc(" ".join(x for x in (context, extra) if x))}</p>'
+                            if (context or extra) else "") + "</div>")
+        with st.container(key="ansacts", horizontal=True, gap="small"):
+            st.button("Explore Bed Use", key="go_beds", type="tertiary", icon=":material/arrow_forward:",
+                      icon_position="right", on_click=goto_tab, args=("explore", "Beds"))
+            st.button("See Waiting Patterns", key="go_wait", type="tertiary", icon=":material/arrow_forward:",
+                      icon_position="right", on_click=goto_tab, args=("explore", "Waiting"))
+    # stage 3 — the evidence
+    with st.container(key="stg_e"):
+        UI.md('<div class="stg">The Evidence</div>'
+              + ('<div class="legend2"><span><i class="lr"></i>Baseline</span><span><i class="ls"></i>Your Scenario</span></div>'
+                 if case != "none" else '<p class="rnote">This run has no changes, so it is the baseline itself.</p>')
+              + evidence_band(s, res, show_ref=case != "none"))
+        if flow:
+            UI.md(f'<div class="imphl">{ic("trending_down")}<div><div class="ih1">What the patient-flow changes '
+                  f'did</div><div class="ih2">{UI.esc(improvement_headline(s, res))}</div></div></div>')
+            st.button("Explore Improvement Impact", key="go_impact", type="tertiary", icon=":material/arrow_forward:",
+                      icon_position="right", on_click=goto_tab, args=("explore", "Improvement Impact"))
+    # stage 4 — the decision implication
+    with st.container(key="stg_d"):
+        UI.md('<div class="stg">The Decision Implication</div><div class="dt2">What This Means for Your Capacity Plan</div>')
+        INS_ICON = {"beds": "bed", "demand": "trending_up", "ok": "check_circle", "wait": "schedule", "flow": "sync_alt"}
+        for i, (k, f, why_, test, action) in enumerate(decision_insights(s, res)):
+            with st.container(key=f"ins_row_{i}"):
+                UI.md(f'<div class="di2">{ic(INS_ICON.get(k, "lightbulb"))}<div><div class="f">{UI.esc(f)}</div>'
+                      f'<div class="w"><span>Why it matters</span>{UI.esc(why_)}</div>'
+                      f'<div class="w"><span>Scenario to test</span>{UI.esc(test)}</div></div></div>')
+                insight_action(i, action)
+        with st.container(key="ovfoot", horizontal=True, gap="small"):
+            st.button("Compare Another Plan", key="go_compare", type="tertiary", icon=":material/compare_arrows:",
+                      on_click=goto_tab, args=("compare",))
+            st.button("How These Figures Are Calculated", key="ov_tech", type="tertiary", icon=":material/info:",
+                      on_click=open_technical)
+
+
+def open_technical():
+    """Open Explore Results with Technical Details expanded and in view."""
+    ss.tech_open = True
+    goto_tab("explore")
+    ss.scroll_to = "technical-details"
+
+
+def technical_details(s):
+    """How the numbers on this page are defined. Secondary reference: collapsed, in Explore Results."""
+    UI.md('<div id="technical-details"></div>')
+    with st.expander("Technical Details", expanded=bool(ss.pop("tech_open", False))):
+        rate = group_return_rate(s["diagnosis"], s["severity"])
+        UI.md(f"""<ul class="simdet">
+<li><b>Simulation runs:</b> {s['reps']} runs of the {s['duration']}-day period for each scenario, with the same random seeds (seed {s['seed']}), so differences are compared run by run. Results are averages across runs.</li>
+<li><b>Clear differences:</b> a difference is called clear when the 95% interval of the run-by-run difference excludes zero. This reflects simulation randomness only, not uncertainty in the data or in how well a real change would work.</li>
+<li><b>Busy-day bed demand:</b> the 95th percentile of beds in use per day in {min(s['reps'], 5)} separate runs with no bed limit (same demand and changes). Bed-day demand comes from the same runs.</li>
+<li><b>Waiting:</b> whole days from asking for a bed to getting one, for every bed request in the period (new admissions and readmissions); requests are followed for up to {S.TAIL_DAYS} days after the period. {S.WARMUP_DAYS} warm-up days are not counted.</li>
+<li><b>Shorter stays:</b> each eligible initial stay in the target group (and age band) is shortened by the percentage and rounded to whole days, with a minimum of one day; stays of patients who died are not shortened.</li>
+<li><b>Fewer readmissions:</b> a relative reduction of the chance of return, e.g. {rate:.1f}% → {rate * (1 - (s['readmit'] or 10) / 100):.1f}% for a {s['readmit'] or 10}% reduction; the model uses one rate for all ages in a group.</li>
+<li><b>Readmissions scheduled:</b> return stays booked by patients admitted during the period; some occur after it ends.</li>
+<li><b>Bed demand by condition:</b> admissions per day × average initial stay; an estimate, not beds measured per condition.</li>
+</ul>""")
+        st.button("Model Documentation", key="res_method", type="tertiary", icon=":material/menu_book:",
+                  on_click=go_to, args=("docs",))
+
+
+def explore_tab(s, res, saved):
+    flow = bool(s["reduction"] or s["readmit"])
+    views = ["Beds", "Waiting", "Admissions & Readmissions", "Length of Stay"] + (["Improvement Impact"] if flow else [])
+    if ss.ui.get("trend_view") not in views:
+        ss.ui["trend_view"] = "Beds"
+    with st.container(key="trendnav"):
+        view = _seg("trend_view", "Explore", views, lambda x: x, store="ui", label_visibility="collapsed")
+    {"Beds": details_beds, "Waiting": details_waiting, "Admissions & Readmissions": details_admissions,
+     "Length of Stay": details_los, "Improvement Impact": lambda s_: impact_tab(s_, res)}[view](s)
+    with st.container(key="exback", horizontal=True, gap="small"):
+        st.button("Back to Overview", key="ex_overview", type="tertiary", icon=":material/arrow_back:",
+                  on_click=goto_tab, args=("overview",))
+        st.button("Compare Another Plan", key="ex_compare", type="tertiary", icon=":material/compare_arrows:",
+                  on_click=goto_tab, args=("compare",))
+    if RH.scenario_case(s) != "none":
+        with st.expander("Detailed Simulation Results"):
+            UI.md('<p class="rnote">The full set of simulation measures, with differences between scenarios and how '
+                  'results varied across repeated runs.</p>')
+            results_stats(s)
+            breakdown_table(s, res)
+    technical_details(s)
+    downloads(s, res, saved_options())
 
 
 def page_results():
     global RV
     if ss.result is None:
-        UI.page_title("Results", "No results yet",
+        UI.page_title("Capacity Results", "No results yet",
                       "Build a capacity scenario and press <b>Run Simulation</b>. Your results will appear here and "
                       "stay available while you move between pages.")
         st.button("Build a Capacity Scenario", type="primary", key="res_empty", icon=":material/arrow_forward:",
@@ -1545,153 +2144,153 @@ def page_results():
         return
     s, res = ss.result["settings"], ss.result["res"]
     if "nb_vals" not in res or "ref_beds" not in s or "bd_demand" not in res:
-        UI.page_title("Results", "Please run the scenario again",
+        UI.page_title("Capacity Results", "Please run the scenario again",
                       "These results were produced by an earlier version of the planner.")
         st.button("Edit Scenario", type="primary", key="res_edit", on_click=go_to, args=("simulator",))
         return
-    case = RH.scenario_case(s)
+    flow = bool(s["reduction"] or s["readmit"])
     RV = RH.Results(s, view_of(res, "Reference"))
-    UI.md(UI.section_nav(RES_SECTIONS))
-    UI.md(f'<div class="ovhead simhead"><div class="eyebrow">Results · {ss.result["finished"]}</div>'
-          '<h1>Capacity Results</h1><p>Could the hospital manage the demand in your scenario?</p></div>')
-
-    # ---- the scenario you tested
     current, _ = current_settings()
     stale = tuple(current[n] for n in NAMES) != ss.result["key"]
     saved = any(x["key"] == ss.result["key"] for x in ss.saved)
-    with st.container(key="restested"):
-        UI.md('<div class="rtt">The Scenario You Tested</div>'
-              + "".join(f'<p class="rts">{UI.esc(x)}</p>' for x in scenario_sentences(s)))
-        with st.container(key="resactions", horizontal=True, gap="small", vertical_alignment="center"):
+    target = ss.pop("scroll_to", None)
+    if target:
+        scroll_to_anchor(target)
+
+    with st.container(key="reshead", horizontal=True, vertical_alignment="bottom", horizontal_alignment="distribute"):
+        UI.md(f'<div class="ovhead simhead"><div class="rgen">Results generated · {UI.esc(fmt_generated(ss.result))}</div>'
+              '<h1>Capacity Results</h1><p>Could the hospital manage the demand in your scenario?</p></div>')
+        with st.container(key="resactions", horizontal=True, gap="small", width="content"):
             st.button("Edit Scenario", key="res_edit", type="primary", icon=":material/edit:", on_click=go_to,
                       args=("simulator",))
-            st.button("Saved for Comparison" if saved else "Save for Comparison", key="cmp_add", disabled=saved,
-                      icon=":material/check:" if saved else ":material/add:", on_click=save_current)
-            if stale:
-                rerun = st.button("Re-run with New Settings", key="res_rerun")
-                UI.md('<span class="status-stale">Your scenario settings have changed since this run.</span>')
-                if rerun:
-                    do_run()
-        with st.expander("View Scenario Settings"):
-            UI.md('<div class="diffs">' + "".join(
-                f'<div class="dfr {st_}"><span>{k}</span><b>{UI.esc(v)}</b>'
-                f'<em>{"Changed" if st_ == "changed" else "Same as reference"}</em></div>'
-                for k, v, st_ in differences(s)) + "</div>")
+            st.button("Saved" if saved else "Save for Comparison", key="cmp_add", disabled=saved,
+                      icon=":material/check:" if saved else ":material/bookmark_add:", on_click=save_current)
+    if stale:
+        UI.md('<div class="stale2">' + ic("info") + '<span>Your scenario settings have changed since these results were '
+              'generated. Run the simulation again to see the updated results. This page still describes the run that '
+              'produced them.</span></div>')
+        if st.button("Run Again with New Settings", key="res_rerun", icon=":material/refresh:"):
+            do_run()
 
-    # ---- 01 capacity overview
-    UI.qhead(1, "Hospital Capacity Overview", "capacity-overview")
-    head, support = key_finding(s, res)
-    UI.md(f'<div class="keyfind2"><div class="kh">{UI.esc(head)}</div>'
-          + (f'<div class="ks">{UI.esc(support)}</div>' if support else "") + "</div>")
-    UI.md(capacity_cards(s, res, show_ref=case != "none"))
-    if case != "none":
-        UI.md(f'<p class="rnote">Compared with the reference scenario ({s["ref_beds"]:,} beds, historical demand, no '
-              'improvements). Grey means the difference was within the variation between simulation runs.</p>')
-    occ = run_mean(res, "Scenario", "occupancy_pct")
-    if occ >= FULL_OCC or (case != "none" and run_mean(res, "Reference", "occupancy_pct") >= FULL_OCC):
-        UI.md('<div class="satnote"><b>Why occupancy may not change:</b> occupancy cannot go above 100%. Once beds are '
-              'full, extra demand shows up as longer waits and busy-day bed demand above the available beds.</div>')
-    pts = capacity_plan_points(s, res)
-    if pts:
-        UI.md('<div class="plan2"><div class="pt">What This Means for Your Capacity Plan</div><ul>'
-              + "".join(f"<li>{UI.esc(p)}</li>" for p in pts) + "</ul></div>")
+    tab = ss.ui.get("res_tab", "overview")
+    UI.md('<div id="res-tabs"></div>')
+    with st.container(key="restabs", horizontal=True, gap="small"):
+        for key, label, icon in RES_TABS:
+            st.button(label, key=f"res_tab_{key}", icon=icon, type="primary" if tab == key else "tertiary",
+                      on_click=goto_tab, args=(key,))
+    {"overview": overview_tab, "explore": explore_tab, "compare": compare_tab}[tab](s, res, saved)
 
-    # ---- 02 compare
-    UI.qhead(2, "Compare Scenarios", "compare-scenarios")
-    UI.md(f'<p class="qsub">{UI.esc(reference_text(s))}</p>'
-          '<div class="legend2"><span><i class="lr"></i>Reference Scenario</span>'
-          '<span><i class="ls"></i>Your Scenario</span></div>')
-    names = ["Beds", "Waiting", "Admissions & Readmissions", "Length of Stay"]
-    fns = {"Beds": details_beds, "Waiting": details_waiting, "Length of Stay": details_los,
-           "Admissions & Readmissions": details_admissions}
-    for tab, nm in zip(st.tabs(names), names):
-        with tab:
-            fns[nm](s)
 
-    # ---- 03 impact
-    UI.qhead(3, "Impact of Planning Changes", "planning-impact")
-    impact_section(s, res)
+# ---------------------------------------------------------------- 02 tabs
+def tab_q(question, answer=None):
+    UI.md(f'<div class="tq2">{question}</div>' + (f'<p class="ta">{answer}</p>' if answer else ""))
 
-    # ---- 04 next
-    UI.qhead(4, "Explore Another Option", "explore-options")
-    UI.md('<p class="qsub">Each option opens Build a Scenario with one change applied. Run the simulation to see its '
-          'results; your current results stay here until then.</p>')
-    with st.container(key="resexplore", horizontal=True, gap="small"):
-        for i, (label, upd, flow) in enumerate(next_ideas(s, res)):
-            st.button(label, key=f"res_try_{i}", on_click=try_next, args=(upd, flow))
-        st.button("Edit Scenario", key="res_edit2", type="tertiary", icon=":material/edit:", on_click=go_to,
-                  args=("simulator",))
-        st.button("Export Data", key="res_export", type="tertiary", icon=":material/download:", on_click=go_to,
-                  args=("export",))
-    render_comparison(saved)
 
+def _weekday_extremes(col):
+    prof = RV.weekday_profile(col)
+    p = prof[prof.scenario == "Scenario"].set_index("weekday")[col]
+    return p.idxmax(), p.max(), p.idxmin(), p.min()
+
+
+def _identical(agg):
+    a = agg[agg.scenario == "Baseline"].value.to_numpy()
+    b = agg[agg.scenario == "Scenario"].value.to_numpy()
+    return len(a) == len(b) and np.allclose(a, b)
 
 
 def details_beds(s):
-    st.markdown("##### Beds in use over the period")
+    res = ss.result["res"]
+    full_s = full_day_share(res, "Scenario", s["beds"])
+    full_r = full_day_share(res, "Reference", s["ref_beds"])
+    nb_s = float(np.mean(res["nb_vals"]["Scenario"]))
+    flat = full_s >= 0.5 or full_r >= 0.5
+    occ_s = run_mean(res, "Scenario", "occupancy_pct")
+    UI.md('<div class="tq2">How did bed use change over time?</div><p class="ta">'
+          + (f"Every bed was in use on {full_s * 100:.0f}% of days in your scenario, so bed use sits at the limit "
+             "while the extra demand waits." if full_s >= 0.5 else
+             f"Your scenario used {occ_s:.0f}% of its beds on an average day and reached the limit on "
+             f"{full_s * 100:.0f}% of days.") + "</p>")
     opts = ["Weekly trend", "Daily", "Weekday pattern"] + (["Monthly"] if H.is_seasonal(s["season"]) else [])
     view = bind("bed_view", st.radio, "View", store="ui", options=opts, horizontal=True, label_visibility="collapsed")
     fig = go.Figure()
     if view == "Weekday pattern":
         prof = RV.weekday_profile("occupied")
         z = [prof[prof.scenario == sc].occupied.tolist() for sc in ("Baseline", "Scenario")]
-        fig.add_trace(go.Heatmap(z=z, x=H.WEEKDAYS, y=["Reference", "Your Scenario"], colorscale=UI.HEAT, showscale=False,
+        fig.add_trace(go.Heatmap(z=z, x=H.WEEKDAYS, y=["Baseline", "Your Scenario"], colorscale=UI.HEAT, showscale=False,
                                  texttemplate="%{z:,.0f}", textfont=dict(size=14), xgap=4, ygap=4,
                                  hovertemplate="%{y} · %{x}: %{z:,.0f} beds in use on average<extra></extra>"))
         UI.style_fig(fig, 200, legend=False)
         fig.update_yaxes(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=14, color=UI.INK), autorange="reversed")
         fig.update_xaxes(side="top", tickfont=dict(size=14, color=UI.INK))
         show(fig, "res_occ_weekday")
+        p = prof[prof.scenario == "Scenario"].set_index("weekday").occupied
+        if p.max() - p.min() < max(1.0, 0.005 * s["beds"]):
+            read = "In your scenario bed use was at about the same level on every weekday."
+        else:
+            read = (f"Average beds in use on each weekday. In your scenario bed use was highest on {p.idxmax()} "
+                    f"({p.max():,.0f}) and lowest on {p.idxmin()} ({p.min():,.0f}).")
     else:
         agg, xlab = RV.by_period("occupied", {"Weekly trend": "Weekly"}.get(view, view), "mean")
-        for name, color, dash in (("Baseline", UI.BASE, "dash"), ("Scenario", UI.TEAL, "solid")):
+        same = _identical(agg)
+        series = (("Scenario", UI.TEAL, "solid"),) if same else (("Baseline", UI.BASE, "dash"), ("Scenario", UI.TEAL, "solid"))
+        for name, color, dash in series:
             a = agg[agg.scenario == name]
+            label = "Baseline and Your Scenario (identical)" if same else name
             if view == "Daily":
-                fig.add_scatter(x=a.period, y=a.value, name=name, mode="lines", line=dict(color=color, width=2.4, dash=dash),
-                                hovertemplate="Day %{x}: %{y:,.0f} beds<extra>" + name + "</extra>")
+                fig.add_scatter(x=a.period, y=a.value, name=label, mode="lines", line=dict(color=color, width=2.4, dash=dash),
+                                hovertemplate="Day %{x}: %{y:,.0f} beds<extra>" + label + "</extra>")
             elif view == "Weekly trend":
-                fig.add_scatter(x=a.label, y=a.value, name=name, mode="lines+markers", marker=dict(size=8),
+                fig.add_scatter(x=a.label, y=a.value, name=label, mode="lines+markers", marker=dict(size=8),
                                 line=dict(color=color, width=3, dash=dash),
-                                hovertemplate="%{x}: %{y:,.0f} beds on an average day<extra>" + name + "</extra>")
-            else:
-                fig.add_bar(x=a.label, y=a.value, name=name, marker_color=color, text=[f"{v:,.0f}" for v in a.value],
-                            textposition="outside", cliponaxis=False)
-        fig.add_hline(y=s["beds"], line_dash="dot", line_color=UI.TEAL_DARK, line_width=2,
-                      annotation_text=f"Your scenario: {s['beds']:,} beds available", annotation_position="top left",
-                      annotation_font_color=UI.TEAL_DARK)
+                                hovertemplate="%{x}: %{y:,.0f} beds on an average day<extra>" + label + "</extra>")
+            else:                                    # monthly bars: values in hover, no stacked labels near the limit
+                fig.add_bar(x=a.label, y=a.value, name=label, marker_color=color,
+                            hovertemplate="%{x}: %{y:,.0f} beds on an average day<extra>" + label + "</extra>")
+        fig.add_hline(y=s["beds"], line_dash="dot", line_color=UI.TEAL_DARK, line_width=2)
         if s["ref_beds"] != s["beds"]:
-            fig.add_hline(y=s["ref_beds"], line_dash="dot", line_color=UI.BASE, line_width=2,
-                          annotation_text=f"Reference: {s['ref_beds']:,} beds available",
-                          annotation_position="bottom left" if s["ref_beds"] < s["beds"] else "top right",
-                          annotation_font_color=UI.MUTED)
-        UI.style_fig(fig, 330)
+            fig.add_hline(y=s["ref_beds"], line_dash="dot", line_color=UI.BASE, line_width=2)
+        fig.add_hline(y=nb_s, line_dash="dash", line_color="#D9785A", line_width=1.5)
+        UI.style_fig(fig, 340)
+        UI.md('<div class="mstrip">'
+              f'<span><i class="k dot"></i>Available beds, your scenario <b>{s["beds"]:,}</b></span>'
+              + (f'<span><i class="k dotb"></i>Available beds, baseline <b>{s["ref_beds"]:,}</b></span>'
+                 if s["ref_beds"] != s["beds"] else "")
+              + f'<span><i class="k dash"></i>Busy-day demand estimate (no bed limit) <b>{nb_s:,.0f}</b></span></div>')
         vals = agg.value
-        lim = [s["beds"], s["ref_beds"]]
-        fig.update_yaxes(title="Beds in use", range=[min(vals.min(), *lim) * 0.92, max(vals.max(), *lim) * 1.05])
+        lim = [s["beds"], s["ref_beds"], nb_s]
+        lo = min(vals.min(), *lim)
+        fig.update_yaxes(title="Beds", range=[lo * (0.0 if view == "Monthly" else 0.92), max(vals.max(), *lim) * 1.04])
         fig.update_xaxes(title=None)
         if view == "Daily":
             monday_ticks(fig, RV.daily_frame())
         show(fig, f"res_occ_{view}")
+        read = {"Weekly trend": "Each point is the average number of beds in use per day in that week.",
+                "Daily": "Beds in use on each day, averaged over the simulation runs.",
+                "Monthly": "Average beds in use per day in each month of the historical admission pattern."}[view]
+        if same:
+            read += " Both scenarios are identical here, so one series is shown."
+    UI.md(f'<p class="rnote">{read}' + (" Lines show beds actually in use, which never exceed the beds available "
+          "(dotted)." if view != "Weekday pattern" else "") + "</p>")
+    if flat:
+        who = ("Both scenarios" if full_s >= 0.5 and full_r >= 0.5 else
+               ("Your scenario" if full_s >= 0.5 else "The baseline"))
+        UI.md(why("Why is bed use flat?", f"{who} reached the available-bed limit on most days. The chart cannot show "
+                  "unmet demand, so look at the Waiting results to see the pressure on capacity."))
+    if nb_s > s["beds"]:
+        UI.md(why("Why can estimated demand exceed available beds?",
+                  f"Actual bed use is limited to the {s['beds']:,} available beds. Estimated demand shows how many beds "
+                  "could be needed on busier days without that limit. When demand exceeds capacity, patients may have "
+                  "to wait. The gap is not an exact number of beds to add."))
     if view in ("Daily", "Weekday pattern"):
-        with st.expander("Why does bed use rise and fall each week?"):
-            UI.md(RH.rhythm_text(RV))
-    res = ss.result["res"]
-    full_s = full_day_share(res, "Scenario", s["beds"])
-    full_r = full_day_share(res, "Reference", s["ref_beds"])
-    if full_s >= 0.5 or full_r >= 0.5:
-        both = full_s >= 0.5 and full_r >= 0.5
-        UI.md('<p class="rnote"><b>Flat lines at the limit do not mean capacity was sufficient.</b> '
-              + ("Both runs" if both else ("Your scenario" if full_s >= 0.5 else "The reference"))
-              + " had every bed in use on most days, so the line cannot rise any further while patients wait. "
-              "See the Waiting tab for the extra pressure.</p>")
-    UI.md('<p class="rnote">Average beds in use across the simulation runs, never more than the beds available.</p>')
+        UI.md(why("Why does bed use vary by weekday?", WEEKDAY_NOTE + (
+            " Here every bed was in use on most days, so this chart cannot show the weekday differences; the Waiting "
+            "results show the extra pressure." if flat else "")))
 
     dx = RH.dx_bed_use(RV)
     constrained = dx.attrs.get("constrained", False)
-    st.markdown("##### Estimated Bed Demand by Condition")
-    UI.md('<p class="rnote">Roughly how many beds each condition’s patients need on an average day: new admissions per '
-          'day × average modelled initial stay. An estimate, not beds counted in the model; the conditions share one '
-          'pool of beds and are not separate wards.</p>')
+    UI.md('<div class="tq2">Which Conditions Contribute Most to Bed Demand?</div>'
+          '<p class="rlead">Compare estimated demand for Heart Failure, Heart Attack and COPD to see which conditions '
+          'contribute most to bed pressure.</p>')
     order = (([] if constrained else ["Return stays (all groups)"]) +
              dx[(dx.scenario == "Baseline") & (dx.kind == "dx")].sort_values("beds").label.tolist())
     fig = go.Figure()
@@ -1705,36 +2304,45 @@ def details_beds(s):
     fig.update_xaxes(visible=False, range=[0, dx.beds.max() * 1.2])
     fig.update_yaxes(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=14, color=UI.INK))
     show(fig, "res_dx_beds")
-    if not constrained:
-        UI.md('<p class="rnote">Return stays are not tracked by condition and are shown as one block.</p>')
-    with st.expander("Why no busy-day bed numbers per diagnosis?"):
-        UI.md("The model places every patient in one shared pool of beds and records only the hospital-wide daily "
-              "count. Busy-day (95th-percentile) or peak beds per diagnosis would need the model to record daily "
-              "occupied beds for each group — a backend change not made in this version. Dividing the hospital-wide "
-              "busy-day reference by patient share would look precise but would not be a model result, so it is not "
-              "shown.")
+    UI.md('<p class="rnote">Approximate demand on an average day: new admissions per day × average initial stay. These '
+          'estimates cover initial stays; they are not beds measured for each condition, and the conditions share one '
+          'pool of beds rather than separate wards. '
+          + ("Return stays are not included in this chart." if constrained else
+             "Return stays cannot be split by condition and are shown as one block (average beds in use minus the "
+             "condition estimates).") + "</p>")
 
 
 def details_waiting(s):
+    (ub, _), (us, _) = M("unresolved_requests", "Baseline"), M("unresolved_requests", "Scenario")
+    daily = RV.daily_frame()
+    daily = daily[daily.scenario.isin(["Baseline", "Scenario"])]
+    if ub > 0 or us > 0:
+        ans = ("Waiting could not be fully measured: some requests were still waiting "
+               f"{TAIL_DAYS} days after the period, so the queue kept growing.")
+    elif daily.queue.max() < 1:
+        ans = "No queue formed in either scenario: every request got a bed on the day it was made."
+    else:
+        q = daily.groupby("scenario").queue.apply(lambda x: (x >= 1).mean())
+        ans = (f"A queue was present at the end of {q.get('Scenario', 0) * 100:.0f}% of days in your scenario and "
+               f"{q.get('Baseline', 0) * 100:.0f}% in the baseline.")
+    tab_q("When did patients have to wait for a bed?", ans)
     (wb, _), (ws, _) = M("waited_pct", "Baseline"), M("waited_pct", "Scenario")
     (mb, _), (ms, _) = M("mean_wait_days", "Baseline"), M("mean_wait_days", "Scenario")
     (qb, _), (qs, _) = M("peak_queue", "Baseline"), M("peak_queue", "Scenario")
-    (ub, _), (us, _) = M("unresolved_requests", "Baseline"), M("unresolved_requests", "Scenario")
     db, dsc = RH.delay_if_waited(RV, "Baseline"), RH.delay_if_waited(RV, "Scenario")
-    f = lambda v: "none waited" if v is None else f"≈ {v:.1f} d"
-    if ub > 0 or us > 0:
-        UI.caution(f"<b>Waiting cannot be fully estimated.</b> On average {us:,.0f} scenario requests ({ub:,.0f} "
-                   "baseline) were still unserved 140 days after the period, so averages would understate waiting.")
-    UI.tiles([("Requests that waited", f"{RH.fmt_pct_small(wb)} → {RH.fmt_pct_small(ws)}",
-               "share of bed requests waiting at least one day"),
-              ("Wait for those who waited", f"{f(db)} → {f(dsc)}",
-               f"all requests: {RH.fmt_days(mb)} → {RH.fmt_days(ms)} days on average"),
-              ("Largest daily queue", f"{qb:,.0f} → {qs:,.0f}", "requests waiting on the busiest day")])
-    daily = RV.daily_frame()
-    daily = daily[daily.scenario.isin(["Baseline", "Scenario"])]
-    if daily.queue.max() < 1:
-        UI.insight("No queue formed in either run: every request got a bed on the day it arrived.")
-    else:
+    qd = daily.groupby("scenario").queue.apply(lambda x: (x >= 1).mean() * 100)
+    f = lambda v: "none waited" if v is None else f"{v:.1f} days"
+    UI.md('<div class="tq3">How often did patients have to wait?</div>')
+    UI.tiles([("Bed requests that waited", f"{fmt_pct(wb)} → {fmt_pct(ws)}", "of all bed requests, at least one day"),
+              ("Largest daily queue", f"{qb:,.0f} → {qs:,.0f}", "requests waiting at the end of the busiest day"),
+              ("Days with patients waiting", f"{qd.get('Baseline', 0):.0f}% → {qd.get('Scenario', 0):.0f}%",
+               "share of days ending with a queue")])
+    UI.md('<div class="tq3">How long did they wait?</div>')
+    pair_txt = lambda a, b: f"{a} in both" if a == b and len(a) > 9 else f"{a} → {b}"
+    UI.tiles([("Average wait, all bed requests", pair_txt(fmt_wait(mb), fmt_wait(ms)), "includes requests that waited 0 days"),
+              ("Average wait, patients who waited", pair_txt(f(db), f(dsc)), "only requests that waited (approximate)")])
+    UI.md('<p class="rnote">Each pair reads Baseline → Your Scenario.</p>')
+    if daily.queue.max() >= 1:
         fig = go.Figure()
         for name, color, dash in (("Baseline", UI.BASE, "dash"), ("Scenario", UI.TEAL, "solid")):
             a = daily[daily.scenario == name]
@@ -1744,8 +2352,7 @@ def details_waiting(s):
         fig.update_yaxes(rangemode="tozero")
         monday_ticks(fig, daily)
         show(fig, "res_queue")
-        with st.expander("Why does waiting come in weekly spikes?"):
-            UI.md(RH.rhythm_text(RV))
+        UI.md(why("Why does waiting rise and fall?", WEEKDAY_NOTE))
     UI.md('<p class="rnote">Waits are whole days in one shared first-come-first-served queue for a hospital bed. They '
           'show capacity pressure and are not emergency-department waiting times. Waiting is not recorded by '
           'condition.</p>')
@@ -1753,6 +2360,14 @@ def details_waiting(s):
 
 def details_los(s):
     d = RH.dx_los(RV)
+    if s["reduction"]:
+        tab_q("Which patient groups experienced shorter hospital stays?",
+              f"Only {_patients(s)} had shorter initial stays in this scenario; other groups change only through "
+              "random variation.")
+    else:
+        tab_q("Which patient groups experienced shorter hospital stays?",
+              "None: this scenario did not change length of stay, so only the three condition groups are shown and "
+              "any differences are random variation.")
     order = d[d.scenario == "Baseline"].label.tolist()[::-1]
     b = d[d.scenario == "Baseline"].set_index("label").loc[order].los
     sc = d[d.scenario == "Scenario"].set_index("label").loc[order].los
@@ -1769,31 +2384,29 @@ def details_los(s):
     fig.update_xaxes(range=[lo - 0.9, hi + 0.9], showgrid=True, gridcolor="#E6EBF0")
     fig.update_yaxes(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=14, color=UI.INK))
     show(fig, "res_los")
-    short, _ = M("targeted_admissions", "Scenario")
     if s["reduction"]:
-        who = "" if s["age"] == "All ages" else (f" (only patients {AGE_PHRASE[s['age']]}; the target row shows "
-                                                  "all ages in the group)")
-        UI.insight(f"About <b>{short:,.0f}</b> stays in {H.group_label(RV.group)}{who} were shortened by the assumed "
-                   f"{s['reduction']}% reduction. Other groups change only through random variation. The effect "
-                   "comes from your assumption, not from evidence of a real intervention.")
-    else:
-        UI.insight("No length-of-stay change was tested, so only the three condition groups are shown; any "
-                   "differences are random variation.")
+        short, _ = M("targeted_admissions", "Scenario")
+        who = "" if s["age"] == "All ages" else (f" (only patients {AGE_PHRASE[s['age']]}; the target row shows all "
+                                                  "ages in the group)")
+        UI.md(f'<p class="rnote">About {short:,.0f} initial stays in {H.group_label(RV.group)}{who} were shortened by '
+              f'the assumed {s["reduction"]}%. The effect comes from your assumption, not from evidence of a real '
+              'intervention.</p>')
 
 
 def details_admissions(s):
     (ab, _), (as_, _) = M("admissions", "Baseline"), M("admissions", "Scenario")
     (rb, _), (rs, _) = M("returns", "Baseline"), M("returns", "Scenario")
-    da = RH.dx_admissions(RV)
-    dx_txt = " · ".join(
-        f"{dx} {da[(da.scenario == 'Baseline') & (da.diagnosis == dx)].per_day.iloc[0]:,.0f} → "
-        f"{da[(da.scenario == 'Scenario') & (da.diagnosis == dx)].per_day.iloc[0]:,.0f}" for dx in H.diagnoses())
-    UI.tiles([("New admissions in period", f"{ab:,.0f} → {as_:,.0f}", f"per day by diagnosis: {dx_txt}"),
-              ("Return stays scheduled", f"{rb:,.0f} → {rs:,.0f}",
-               "by patients admitted in the period; some return after it ends")])
+    same_adm = abs(ab - as_) < 0.5
+    tab_q("Did admissions or return stays change?",
+          ("New admissions are unchanged because this scenario does not change admission demand. "
+           if same_adm else f"New admissions changed from {ab:,.0f} to {as_:,.0f} over the period. ")
+          + f"Readmissions scheduled went from {rb:,.0f} to {rs:,.0f}.")
+    UI.md('<p class="rnote"><b>New admissions</b> are patients arriving for a first (initial) stay. <b>Readmissions '
+          'scheduled</b> are return stays booked by patients admitted during the period; they are counted when the '
+          'original patient gets a bed, and some happen after the period ends.</p>')
     c1, c2 = st.columns(2)
     with c1:
-        series = bind("adm_series", st.radio, "Show", store="ui", options=["New admissions", "Return stays scheduled"],
+        series = bind("adm_series", st.radio, "Show", store="ui", options=["New admissions", "Readmissions scheduled"],
                       horizontal=True)
     with c2:
         opts = ["Daily", "Weekly"] + (["Monthly"] if H.is_seasonal(s["season"]) else []) + ["Weekday pattern"]
@@ -1803,138 +2416,81 @@ def details_admissions(s):
     if view == "Weekday pattern":
         prof = RV.weekday_profile(col)
         z = [prof[prof.scenario == sc][col].tolist() for sc in ("Baseline", "Scenario")]
-        fig.add_trace(go.Heatmap(z=z, x=H.WEEKDAYS, y=["Reference", "Your Scenario"], colorscale=UI.HEAT, showscale=False,
+        fig.add_trace(go.Heatmap(z=z, x=H.WEEKDAYS, y=["Baseline", "Your Scenario"], colorscale=UI.HEAT, showscale=False,
                                  texttemplate="%{z:,.0f}", textfont=dict(size=14), xgap=4, ygap=4,
                                  hovertemplate="%{y} · %{x}: %{z:,.0f} per day<extra></extra>"))
         UI.style_fig(fig, 200, legend=False)
         fig.update_yaxes(gridcolor="rgba(0,0,0,0)", autorange="reversed", tickfont=dict(size=14, color=UI.INK))
         fig.update_xaxes(side="top", tickfont=dict(size=14, color=UI.INK))
+        hi, hv, lo, lv = _weekday_extremes(col)
+        note = f"Per day on each weekday, in your scenario highest on {hi} ({hv:,.0f}) and lowest on {lo} ({lv:,.0f})."
     else:
         agg, _ = RV.by_period(col, view, "mean" if view == "Daily" else "sum")
-        for name, color, dash in (("Baseline", UI.BASE, "dash"), ("Scenario", UI.TEAL, "solid")):
+        same = _identical(agg)
+        names = (("Scenario", UI.TEAL, "solid"),) if same else (("Baseline", UI.BASE, "dash"), ("Scenario", UI.TEAL, "solid"))
+        many = agg[agg.columns[agg.columns.isin(["label", "period"])][0]].nunique() > 8
+        for name, color, dash in names:
             a = agg[agg.scenario == name]
+            label = "Baseline and Your Scenario (identical)" if same else name
             if view == "Daily":
-                fig.add_scatter(x=a.period, y=a.value, name=name, mode="lines", line=dict(color=color, width=2, dash=dash))
+                fig.add_scatter(x=a.period, y=a.value, name=label, mode="lines", line=dict(color=color, width=2, dash=dash))
             else:
-                fig.add_bar(x=a.label, y=a.value, name=name, marker_color=color, text=[f"{v:,.0f}" for v in a.value],
+                fig.add_bar(x=a.label, y=a.value, name=label, marker_color=color,
+                            text=None if (same or many) else [f"{v:,.0f}" for v in a.value],
                             textposition="outside", cliponaxis=False)
         UI.style_fig(fig, 320)
         fig.update_yaxes(title="Per day" if view == "Daily" else "Total", rangemode="tozero")
         if view == "Daily":
             monday_ticks(fig, RV.daily_frame())
+        note = ("Both scenarios are identical here, so one series is shown." if same else
+                {"Daily": "Per day, averaged over the simulation runs.", "Weekly": "Total in each week.",
+                 "Monthly": "Total in each month of the historical pattern."}[view])
     show(fig, f"res_adm_{col}_{view}")
-    if col == "new_returns":
-        UI.note("Return stays are counted on the day the original patient got a bed, not the day they come back — "
-                "not a 30-day readmission rate or an observed readmission count.")
+    UI.md(f'<p class="rnote">{note}</p>')
+    if view == "Daily":
+        UI.md(why("Why does this pattern repeat?", "The simulation follows historical differences between weekdays. "
+                  "Select Weekday Pattern to compare the days."))
+        st.button("Show Weekday Pattern", key="adm_to_weekday", type="tertiary", icon=":material/calendar_view_week:",
+                  on_click=lambda: (ss.ui.__setitem__("adm_view", "Weekday pattern"), ss.pop("w_ui_adm_view", None)))
 
 
 def results_stats(s):
-    UI.note(f"Mean over {s['reps']} runs ± half-width of a 95% Monte Carlo interval; differences are paired run by run. "
-            "These intervals reflect simulation randomness only — not uncertainty in the data, the assumptions or "
-            "real-world effectiveness.")
+    UI.md(f'<p class="rnote">Average over {s["reps"]} runs ± half-width of a 95% interval; differences are paired run by '
+          'run (same random seeds). The intervals reflect simulation randomness only, not uncertainty in the data, the '
+          'assumptions or how well a real intervention would work.</p>')
 
     def u(v, h, dp, sign=False):
         if not (RH.finite(v) and RH.finite(h)):
             return "Not estimable"
         return f"{v:{'+' if sign else ''},.{dp}f} ± {h:,.{dp}f}"
 
-    table = [("Average stay, target group (days)", "target_mean_los", 2), ("Average stay, all patients (days)", "average_los", 2),
-             ("New admissions per day", "avg_admissions_day", 1), ("Bed occupancy (%)", "occupancy_pct", 1),
-             ("Average beds occupied", "avg_occupied", 0), ("Busiest day, beds occupied", "peak_occupied", 0),
-             ("Total bed-days", "bed_days", 0),
-             ("Average wait (days)", "mean_wait_days", 2), ("95th-percentile wait (days)", "p95_wait_days", 2),
-             ("Requests that waited (%)", "waited_pct", 1), ("Largest daily queue", "peak_queue", 0),
-             ("Return stays scheduled", "returns", 0), ("Stays shortened (target group)", "targeted_admissions", 0)]
-    rows = []
-    for name, key, dp in table:
-        (bm, bc), (sm, sc_) = M(key, "Baseline"), M(key, "Scenario")
-        d, ci, cl = E(key)
-        rows.append({"Measure": name, "Reference": u(bm, bc, dp), "Tested Scenario": u(sm, sc_, dp),
-                     "Difference": u(d, ci, dp, True),
-                     "Clear difference?": "Not estimable" if not RH.finite(d) else ("Yes" if cl else "Within noise")})
-    (bn, bc), (sn, sc_) = RV.nb("Baseline"), RV.nb("Scenario")
-    d, ci, cl = RV.nb_effect()
-    rows.append({"Measure": "Busy-day planning reference, unlimited beds (p95)", "Reference": u(bn, bc, 0),
-                 "Tested Scenario": u(sn, sc_, 0), "Difference": u(d, ci, 0, True),
-                 "Clear difference?": "Yes" if cl else "Within noise"})
-    st.dataframe(pd.DataFrame(rows), hide_index=True, **DF_KW)
-    st.caption(f"The planning reference uses {min(s['reps'], 5)} separate unlimited-bed runs.")
-
-
-STATE_LABEL = {"ok": ("Managed demand", "good"), "busy": ("Some waiting", "warn"), "full": ("At capacity", "bad"),
-               "overloaded": ("Demand exceeded beds", "bad")}
-
-
-def render_comparison(saved_now):
-    UI.md('<div class="rsub" id="compare-options">Compare Your Options</div>'
-          '<p class="rlead">Save this scenario, test another option, and compare the results side by side.</p>')
-    st.button("Saved for Comparison" if saved_now else "Save This Scenario", key="cmp_add2", disabled=saved_now,
-              icon=":material/check:" if saved_now else ":material/add:", on_click=save_current)
-    recs = [r for r in ss.saved if "sentences" in r]
-    if not recs:
-        return
-    cur = ss.result["key"] if ss.result else None
-    cards = []
-    for r in recs:
-        lab, cls = STATE_LABEL.get(r["state"], ("", ""))
-        wait = "Not estimable" if r["wait"] is None else _days(r["wait"])
-        waited = "Not estimable" if r["waited"] is None else RH.fmt_pct_small(r["waited"])
-        cards.append(
-            f'<div class="cmp2{" cur" if r["key"] == cur else ""}"><div class="nm">{UI.esc(r["title"])}'
-            f'{"<em>Current results</em>" if r["key"] == cur else ""}</div>'
-            f'<div class="as">{UI.esc(" ".join(r["sentences"]))}</div>'
-            f'<div class="st {cls}">{lab}</div>'
-            f'<div class="m"><span>Available beds</span><b>{r["beds"]:,}</b></div>'
-            f'<div class="m"><span>Bed occupancy</span><b>{r["occ"]:.0f}%</b></div>'
-            f'<div class="m"><span>Average wait for a bed</span><b>{wait}</b></div>'
-            f'<div class="m"><span>Requests that waited</span><b>{waited}</b></div>'
-            f'<div class="m"><span>Busy-day bed demand</span><b>{r["nb"]:,.0f}</b></div></div>')
-    UI.md(f'<div class="cmpgrid">{"".join(cards)}</div>')
-    with st.container(key="cmprm", horizontal=True, gap="small"):
-        for r in recs:
-            st.button(f"Remove {r['title']}", key=f"cmp_rm_{r['title']}", type="tertiary", on_click=remove_saved,
-                      args=(r["key"],))
-    UI.md(f'<p class="rnote">{len(recs)} of {MAX_SAVED} saved. Each option keeps the settings and results of its own '
-          'run. The tool does not pick a best option: weigh waiting, busy-day demand and beds against what is '
-          'feasible for your hospital.</p>')
-
-
-# =========================================================================== SECONDARY: EXPORT / DOCS
-def page_export():
-    UI.page_title("Export data", "Download data from your latest run",
-                  "CSV and JSON files for further analysis (for example in SAS or Excel). Patient-level calibration "
-                  "data are never included.")
-    if ss.result is None:
-        UI.insight("Run a simulation first — exports always correspond to your latest completed run.")
-        st.button("Go to the Scenario Simulator →", key="dl_empty", on_click=go_to, args=("simulator",))
-        return
-    s = ss.result["settings"]
-    res = ss.result["res"]
-    UI.md(f'<div class="testedline">{UI.esc(results_line(s))}</div>')
-    tag = (f"{s['diagnosis']}{s['severity']}_{s['age'].replace(' ', '')}_los{s['reduction']}_dem{s['demand']:+d}"
-           f"_ret{s['readmit']}_{s['beds']}beds_{s['duration']}d_{s['season'].replace(' ', '')}")
-    UI.note(f"Run completed {ss.result['finished']}. File names carry the tag <code>{tag}</code>; full settings are in "
-            "the run-settings file.")
-    run_json = json.dumps(dict(interface_version=APP_VERSION, model_version=MODEL_VERSION, completed=ss.result["finished"],
-                               settings=s, bed_choice=BED_MODES[ss.result["bed_mode"]],
-                               readmission_reduction_scope="selected patient group (condition, severity, age group)",
-                               planning_reference_beds=ss.result["reference"],
-                               warmup_days=S.WARMUP_DAYS, waiting_follow_up_days=S.TAIL_DAYS,
-                               calibration_encounters=int(S.calibration()["total"]),
-                               historical_period=H.PERIOD_LABEL), indent=2, default=str)
-    files = [("Replication results", "One row per run and scenario", res["reps"].to_csv(index=False), f"replications_{tag}.csv", "text/csv"),
-             ("Daily time series", "Beds in use, queue, cumulative admissions", res["daily"].to_csv(index=False), f"daily_{tag}.csv", "text/csv"),
-             ("Patient-group summary", "Admissions and modelled stay per group", res["sub"].to_csv(index=False), f"groups_{tag}.csv", "text/csv"),
-             ("Bed planning reference", "Unlimited-bed busy-day reference", res["nb"].to_csv(index=False), f"beds_reference_{tag}.csv", "text/csv"),
-             ("Run settings", "All assumptions and versions (JSON)", run_json, f"run_settings_{tag}.json", "application/json"),
-             ("Data dictionary", "What every column means", RH.DATA_DICTIONARY.to_csv(index=False), "data_dictionary.csv", "text/csv")]
-    cols = st.columns(3)
-    for i, (label, desc, data, name, mime) in enumerate(files):
-        with cols[i % 3]:
-            with st.container(border=True):
-                UI.md(f"<b>{label}</b><br><span class='note'>{desc}</span>")
-                st.download_button(f"⤓ Download {name.rsplit('.', 1)[1].upper()}", data.encode("utf-8"),
-                                   file_name=name, mime=mime, key=f"dl_{i}", **DL_KW)
+    groups = {"Bed Capacity": [("Bed occupancy (%)", "occupancy_pct", 1), ("Average beds occupied", "avg_occupied", 0),
+                               ("Busiest day, beds occupied", "peak_occupied", 0), ("Occupied bed-days", "bed_days", 0)],
+              "Patient Waiting": [("Bed requests that waited (%)", "waited_pct", 1),
+                                  ("Average wait, all requests (days)", "mean_wait_days", 2),
+                                  ("95th-percentile wait (days)", "p95_wait_days", 2),
+                                  ("Largest daily queue", "peak_queue", 0)],
+              "Admissions & Readmissions": [("New admissions per day", "avg_admissions_day", 1),
+                                            ("Readmissions scheduled", "returns", 0)],
+              "Patient Flow and Length of Stay": [("Average initial stay, target group (days)", "target_mean_los", 2),
+                                                  ("Average initial stay, all patients (days)", "average_los", 2),
+                                                  ("Stays shortened (target group)", "targeted_admissions", 0)]}
+    for g, table in groups.items():
+        rows = []
+        for name, key, dp in table:
+            (bm, bc), (sm, sc_) = M(key, "Baseline"), M(key, "Scenario")
+            d, ci, cl = E(key)
+            rows.append({"Measure": name, "Baseline": u(bm, bc, dp), "Your Scenario": u(sm, sc_, dp),
+                         "Difference": u(d, ci, dp, True),
+                         "Clear difference?": "Not estimable" if not RH.finite(d) else ("Yes" if cl else "No clear difference")})
+        if g == "Bed Capacity":
+            (bn, bc), (sn, sc_) = RV.nb("Baseline"), RV.nb("Scenario")
+            d, ci, cl = RV.nb_effect()
+            rows.append({"Measure": "Estimated beds needed on busy days (p95, no bed limit)", "Baseline": u(bn, bc, 0),
+                         "Your Scenario": u(sn, sc_, 0), "Difference": u(d, ci, 0, True),
+                         "Clear difference?": "Yes" if cl else "No clear difference"})
+        st.markdown(f"**{g}**")
+        st.dataframe(pd.DataFrame(rows), hide_index=True, **DF_KW)
 
 
 def page_docs():
@@ -2019,7 +2575,8 @@ def page_docs():
 
 # =========================================================================== router
 render_nav()
+nav_behaviour()
 {"welcome": page_welcome, "overview": page_overview, "simulator": page_simulator, "results": page_results,
- "export": page_export, "downloads": page_export, "docs": page_docs}.get(ss.page, page_welcome)()
-if ss.page not in ("welcome", "overview", "simulator"):
+ "export": page_results, "downloads": page_results, "docs": page_docs}.get(ss.page, page_welcome)()
+if ss.page == "docs":                              # caveats live in Help and the documentation, not on every page
     render_footer()
