@@ -1194,8 +1194,10 @@ DESIGN_CSS = f"""
 [data-testid="stHeader"] {{ pointer-events:none; }}
 [data-testid="stHeader"] [data-testid="stToolbar"], [data-testid="stHeader"] [data-testid="stToolbar"] *,
 [data-testid="stStatusWidget"], [data-testid="stStatusWidget"] * {{ pointer-events:auto; }}
-.block-container {{ padding-top:{NAV_TOP + NAV_H + 30}px !important; }}
+.block-container {{ padding-top:{NAV_TOP + NAV_H + 12}px !important; }}
+/* Streamlit gives the container an inline width; left/right alone would let it overflow the right edge */
 .st-key-topnav {{ position:fixed !important; z-index:100; top:{NAV_TOP}px; left:3rem; right:3rem; height:{NAV_H}px;
+  width:auto !important; max-width:none !important; min-width:0 !important;
   box-sizing:border-box; margin:0 !important; display:grid !important;
   grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr); align-items:center; column-gap:16px;
   padding:0 16px !important; background:rgba(255,255,255,.80); -webkit-backdrop-filter:saturate(1.6) blur(14px);
@@ -1232,7 +1234,7 @@ body[data-hcp-nav="compact"] .st-key-navlinks button {{ min-height:2.2rem !impor
   .st-key-nav_menu {{ display:flex !important; }} }}
 @media (max-width: 760px) {{
   .st-key-topnav {{ left:1rem; right:1rem; padding-left:14px !important; }}
-  .block-container {{ padding-top:{NAV_TOP + NAV_H_C + 24}px !important; }}
+  .block-container {{ padding-top:{NAV_TOP + NAV_H_C + 12}px !important; }}
   .st-key-topnav, body[data-hcp-nav="compact"] .st-key-topnav {{ height:{NAV_H_C}px; }}
   .brand2 .bname {{ font-size:1rem !important; }} }}
 
@@ -1248,6 +1250,12 @@ body[data-hcp-nav="compact"] .st-key-navlinks button {{ min-height:2.2rem !impor
 [data-testid="stElementContainer"]:has(iframe[data-testid="stIFrame"][height="0"]) {{ position:absolute !important;
   width:0 !important; height:0 !important; overflow:hidden !important; }}
 
+/* style-only markdown blocks (this CSS) still take a slot and a gap in the page flow; the styles apply anyway */
+[data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] style):not(:has(p, h1, h2, h3, span, svg, button, img, label, table, ul)) {{
+  display:none !important; }}
+/* Streamlit's hover link icon next to headings is not useful here */
+[data-testid="stHeaderActionElements"], [data-testid="stMarkdownContainer"] h1 a[href^="#"] svg,
+[data-testid="stMarkdownContainer"] h2 a[href^="#"] svg {{ display:none !important; }}
 /* ---- typography: one hierarchy across pages ---- */
 .ovhead h1, .ptitle h1 {{ font-size:clamp(2.1rem, 3.1vw, 2.7rem) !important; font-weight:760 !important;
   letter-spacing:-0.032em !important; line-height:1.08 !important; color:{NAVY} !important; }}
