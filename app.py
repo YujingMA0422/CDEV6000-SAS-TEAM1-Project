@@ -72,6 +72,7 @@ BED_MODES = {"reference": "Default beds", "minus5": "5% fewer", "minus10": "10% 
 def go_to(page):
     if ss.page != page:
         ss.prev_page = ss.page
+        ss.page_changed = True               # a new page opens at its top unless an anchor is requested
     ss.page = page
 
 
@@ -298,19 +299,19 @@ def render_footer():
 WELCOME_QUESTIONS = [
     # key, label, question, (what you can test, what the results show, decisions it can inform), action, anchor
     ("demand", "Rising Demand", "Can the hospital cope with more admissions?",
-     ("Higher or lower admission demand than historical levels, with the beds the hospital has.",
+     ("Test how higher or lower admissions affect your hospital's available beds.",
       "How full beds become, how many beds a busy day would need, and how often and how long patients wait.",
       "Whether current capacity can absorb expected growth, or when extra beds or flow improvements are needed."),
      "Set Admission Demand", "step-2"),
     ("beds", "Bed Capacity", "How would changing the number of available beds affect pressure and waiting?",
      ("More or fewer available beds than the default for the same admission demand.",
       "Occupancy, how many days end with patients waiting, and how large queues become.",
-      "How many beds to plan for, and how much spare capacity busier periods need."),
+      "Whether your hospital has enough beds, and how much extra capacity may be needed during busy periods."),
      "Set Available Beds", "step-3"),
     ("flow", "Patient Flow", "Could shorter stays or fewer readmissions help?",
      ("Shorter initial stays and fewer readmissions for one chosen patient group.",
       "Bed-days freed, return stays avoided and whether waiting changes.",
-      "Which patient groups to prioritise for improvement work, and whether it could ease bed pressure."),
+      "Which patient groups may benefit most from targeted improvements, and how these changes could ease bed pressure."),
      "Test Patient-Flow Improvements", "step-4"),
 ]
 
@@ -322,11 +323,26 @@ def open_step(anchor):
 
 
 def scroll_to_anchor(target):
+    """Bring an anchor into view below the fixed header, reliably on the first click.
+
+    Lands instantly, then re-checks for ~1.5 s while charts and widgets finish laying out (a smooth scroll started
+    before the page has settled stops short). Stops as soon as the person scrolls, clicks or types. The anchor gets
+    keyboard focus without a second jump. A nonce makes every request a fresh frame, so asking for the same step twice
+    in a row still works."""
+    import json
+    import time
     import streamlit.components.v1 as components
+    ss.anchored = True
     components.html(
-        "<script>const go=(n)=>{const el=window.parent.document.getElementById('" + target + "');"
-        "if(el){el.scrollIntoView({behavior:'smooth',block:'start'});}else if(n<40){setTimeout(()=>go(n+1),100);}};"
-        "go(0);</script>", height=0)
+        "<script>(function(){const D=window.parent.document,t=" + json.dumps(target) + ";let n=0,k=0,stop=false;"
+        "const halt=()=>{stop=true;};['wheel','touchstart','keydown','mousedown'].forEach(e=>D.addEventListener(e,halt,{once:true,capture:true}));"
+        "function go(){if(stop)return;const el=D.getElementById(t);if(!el){if(n++<80)setTimeout(go,100);return;}"
+        "const y=el.getBoundingClientRect().top,want=parseFloat(getComputedStyle(el).scrollMarginTop)||0;"
+        "if(k===0||Math.abs(y-want)>6){el.scrollIntoView({behavior:'instant',block:'start'});}"
+        "if(k===0){if(!el.hasAttribute('tabindex'))el.setAttribute('tabindex','-1');try{el.focus({preventScroll:true});}catch(e){}}"
+        "if(k++<6)setTimeout(go,250);}"
+        "setTimeout(go,60);})();</script>"   # setTimeout, not requestAnimationFrame: rAF is paused in hidden frames
+        f"<!-- {time.time_ns()} -->", height=0)
 
 
 def welcome_picker():
@@ -350,7 +366,7 @@ def welcome_picker():
     with st.container(key="wl_pick"):
         UI.md('<h2 class="wl-h2">What would you like to explore?</h2>'
               '<p class="wl-sub">Choose a planning question to see what you can test and what it can help you decide.</p>')
-        c1, c2 = st.columns([0.92, 1.5], gap="large")
+        c1, c2 = st.columns([0.9, 1.55], gap="medium")
         with c1:
             UI.md(f'<fieldset class="wqopts"><legend class="sr">Planning question</legend>{opts}</fieldset>')
         with c2:
@@ -2578,5 +2594,17 @@ render_nav()
 nav_behaviour()
 {"welcome": page_welcome, "overview": page_overview, "simulator": page_simulator, "results": page_results,
  "export": page_results, "downloads": page_results, "docs": page_docs}.get(ss.page, page_welcome)()
+if ss.pop("page_changed", False) and not ss.pop("anchored", False):
+    # Streamlit keeps the scroll position of the previous page; start a newly opened page at its top
+    import streamlit.components.v1 as _components
+    import time as _time
+    # (repeated for ~1 s while the old page's elements are replaced; stops if the person scrolls or clicks)
+    _components.html("<script>(function(){const D=window.parent.document;let k=0,stop=false;"
+                     "['wheel','touchstart','keydown','mousedown'].forEach(e=>D.addEventListener(e,()=>{stop=true;},{once:true,capture:true}));"
+                     "function go(){if(stop)return;const m=D.querySelector('[data-testid=\"stMain\"]');"
+                     "if(m&&m.scrollTop>0)m.scrollTo({top:0,behavior:'instant'});"
+                     "const se=D.scrollingElement;if(se&&se.scrollTop>0)se.scrollTop=0;if(k++<8)setTimeout(go,150);}go();})();</script>"
+                     f"<!-- {_time.time_ns()} -->", height=0)
+ss.pop("anchored", None)
 if ss.page == "docs":                              # caveats live in Help and the documentation, not on every page
     render_footer()

@@ -745,14 +745,19 @@ html, [data-testid="stMain"], [data-testid="stAppViewContainer"] {{ scroll-behav
 /* segmented controls: wrap instead of clipping when a column is narrow */
 [data-testid="stButtonGroup"], [data-testid="stButtonGroup"] > div {{ flex-wrap:wrap !important; max-width:100%; row-gap:6px; }}
 [data-testid="stButtonGroup"] button {{ flex:0 0 auto; white-space:nowrap; }}
-/* desktop: left column scrolls on its own, Your Scenario stays in view */
-@media (min-width: 1100px) and (min-height: 560px) {{
-  .st-key-simleft {{ max-height:calc(100vh - 8.5rem); overflow-y:auto; overflow-x:hidden; padding-right:10px;
-    overscroll-behavior:contain; scroll-behavior:smooth; }}
-  .st-key-summary {{ max-height:calc(100vh - 8.5rem); overflow-y:auto; display:flex; flex-direction:column; }}
-  .st-key-summary .st-key-run_sim {{ position:sticky; bottom:0; background:linear-gradient(rgba(245,247,250,0), {CANVAS} 30%);
-    padding-top:10px; padding-bottom:4px; z-index:2; }}
+/* desktop: one page scroll; Your Scenario stays in view as a sticky panel (v5.5: the left column no longer scrolls
+   on its own, which had created a second scrollbar competing with the page) */
+@media (min-width: 1100px) and (min-height: 700px) {{
+  [data-testid="stHorizontalBlock"]:has(.st-key-simleft):has(.st-key-summary) {{ align-items:stretch !important; }}
+  [data-testid="stColumn"]:has(.st-key-summary) {{ display:flex !important; flex-direction:column; }}
+  [data-testid="stColumn"]:has(.st-key-summary) > * {{ flex:1 1 auto; }}
+  .st-key-summary, [data-testid="stLayoutWrapper"]:has(> .st-key-summary) {{ position:sticky !important;
+    top:calc(var(--hcp-nav) + 4px) !important; }}
 }}
+@media (max-width: 1099px), (max-height: 699px) {{ .st-key-summary {{ position:static !important; }} }}
+/* room at the end of Build a Scenario so the Welcome step links (Step 3, Step 4) can bring their
+   step to the top of the window instead of stopping at the page end */
+.block-container:has(.st-key-simleft) {{ padding-bottom:45vh !important; }}
 
 @media (max-width: 1099px) {{
   [data-testid="stHorizontalBlock"]:has(.st-key-simleft):has(.st-key-summary) {{ flex-direction:column !important; }}
@@ -1191,12 +1196,17 @@ DESIGN_CSS = f"""
              radial-gradient(900px 360px at -5% -180px, rgba(11,37,69,.07), rgba(11,37,69,0) 70%), {CANVAS}; }}
 
 /* ---- global navigation: fixed, truly centred, compact after scrolling ---- */
-[data-testid="stHeader"] {{ pointer-events:none; }}
-[data-testid="stHeader"] [data-testid="stToolbar"], [data-testid="stHeader"] [data-testid="stToolbar"] *,
-[data-testid="stStatusWidget"], [data-testid="stStatusWidget"] * {{ pointer-events:auto; }}
+/* Streamlit's header is fixed over the top ~60px of the window (z-index far above page content) and its toolbar
+   strip spans the full width. Transparent, but it swallowed clicks on the top of the nav, and on all of the compact
+   nav after scrolling. Only its real controls may take clicks; everything else lets them through. */
+[data-testid="stHeader"], [data-testid="stHeader"] * {{ pointer-events:none !important; }}
+[data-testid="stHeader"] button, [data-testid="stHeader"] a, [data-testid="stHeader"] [role="button"],
+[data-testid="stHeader"] input, [data-testid="stHeader"] select {{ pointer-events:auto !important; }}
 .block-container {{ padding-top:{NAV_TOP + NAV_H + 12}px !important; }}
 /* Streamlit gives the container an inline width; left/right alone would let it overflow the right edge */
-.st-key-topnav {{ position:fixed !important; z-index:100; top:{NAV_TOP}px; left:3rem; right:3rem; height:{NAV_H}px;
+/* above Streamlit's header layer (999990) so nothing in that strip can sit over the nav; below popovers, menus and
+   tooltips (1000060+) so the Help popover and dropdowns still open over it */
+.st-key-topnav {{ position:fixed !important; z-index:999995; top:{NAV_TOP}px; left:3rem; right:3rem; height:{NAV_H}px;
   width:auto !important; max-width:none !important; min-width:0 !important;
   box-sizing:border-box; margin:0 !important; display:grid !important;
   grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr); align-items:center; column-gap:16px;
@@ -1210,10 +1220,11 @@ DESIGN_CSS = f"""
 .st-key-topnav > :nth-child(2) {{ justify-self:center; }}
 .st-key-topnav > :nth-child(3) {{ justify-self:end; }}
 .st-key-navlinks {{ gap:10px !important; padding:0 !important; }}
-.st-key-navlinks button {{ position:relative; min-height:2.45rem !important; padding:0 17px !important;
-  transition:background-color .2s ease, color .2s ease, min-height .28s var(--hcp-ease) !important; }}
+.st-key-navlinks button {{ position:relative; min-height:42px !important; height:42px; padding:0 18px !important; cursor:pointer;
+  transition:background-color .2s ease, color .2s ease !important; }}
 .st-key-navlinks button::after {{ content:""; position:absolute; left:50%; bottom:4px; width:0; height:2px; border-radius:2px;
-  background:{TEAL}; transform:translateX(-50%); transition:width .25s var(--hcp-ease); }}
+  background:{TEAL}; transform:translateX(-50%); transition:width .25s var(--hcp-ease); pointer-events:none; }}
+.st-key-navlinks button * {{ pointer-events:none; }}
 .st-key-navlinks [data-testid="stBaseButton-primary"], .st-key-navlinks button[kind="primary"] {{
   background:rgba(11,37,69,.06) !important; color:{NAVY} !important; }}
 .st-key-navlinks [data-testid="stBaseButton-primary"]::after, .st-key-navlinks button[kind="primary"]::after {{ width:18px; }}
@@ -1224,7 +1235,6 @@ body[data-hcp-nav="compact"] .st-key-topnav {{ top:{NAV_TOP_C}px; height:{NAV_H_
   background:rgba(255,255,255,.90); box-shadow:0 1px 2px rgba(11,37,69,.05), 0 14px 32px -20px rgba(11,37,69,.38); }}
 body[data-hcp-nav="compact"] .brand2 .bsub {{ opacity:0; max-height:0; margin-top:0; }}
 body[data-hcp-nav="compact"] .brand2 .bmark {{ width:26px; height:26px; }}
-body[data-hcp-nav="compact"] .st-key-navlinks button {{ min-height:2.2rem !important; }}
 .st-key-nav_menu {{ display:none !important; }}
 .st-key-nav_menu button {{ border-radius:999px !important; border:1px solid #E3E8EE !important; min-height:2.2rem; }}
 [data-testid="stPopoverBody"] [class*="st-key-navm_"] button {{ justify-content:flex-start; border-radius:10px !important; }}
@@ -1241,8 +1251,7 @@ body[data-hcp-nav="compact"] .st-key-navlinks button {{ min-height:2.2rem !impor
 /* ---- page-level sticky elements sit below the header, never under it ---- */
 .st-key-restabs {{ top:var(--hcp-nav) !important; z-index:20 !important; }}
 [data-testid="stLayoutWrapper"]:has(> .st-key-restabs) {{ position:sticky; top:var(--hcp-nav); z-index:20; }}
-.st-key-summary {{ top:calc(var(--hcp-nav) + 4px) !important; }}
-@media (min-width: 1100px) {{ .st-key-summary {{ max-height:calc(100vh - var(--hcp-nav) - 24px) !important; }} }}
+
 @media (min-width: 1280px) {{ .secnav {{ top:{NAV_TOP + NAV_H + 34}px !important; }} }}
 .stApp [id] {{ scroll-margin-top:calc(var(--hcp-nav) + 24px); }}
 /* zero-height helper frames (scrolling, header behaviour) take no space */
@@ -1254,6 +1263,7 @@ body[data-hcp-nav="compact"] .st-key-navlinks button {{ min-height:2.2rem !impor
 [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] style):not(:has(p, h1, h2, h3, span, svg, button, img, label, table, ul)) {{
   display:none !important; }}
 /* Streamlit's hover link icon next to headings is not useful here */
+[tabindex="-1"]:focus {{ outline:none; }}
 [data-testid="stHeaderActionElements"], [data-testid="stMarkdownContainer"] h1 a[href^="#"] svg,
 [data-testid="stMarkdownContainer"] h2 a[href^="#"] svg {{ display:none !important; }}
 /* ---- typography: one hierarchy across pages ---- */
@@ -1755,29 +1765,33 @@ def mechanism():
 
 
 def wl_preview(kind):
-    """Small schematic for a planning question. Illustrative only: no data, no simulated values."""
-    bars, extra = [], ""
+    """Small schematic for each planning question, each showing a different idea. Illustrative only: no data and no
+    simulated values. Demand: rising demand crossing a capacity line. Beds: steady demand against two bed levels,
+    with the gap below the lower level marked. Flow: the same demand before and after an improvement."""
     if kind == "demand":
-        hs = [26, 30, 34, 39, 45, 52, 58]
-        for i, h in enumerate(hs):
-            over = max(0, h - 46)
-            bars.append(f'<rect x="{14 + i * 19}" y="{74 - h}" width="11" height="{h}" rx="3" class="b"/>')
-            if over:
-                bars.append(f'<rect x="{14 + i * 19}" y="{74 - h}" width="11" height="{over + 2}" rx="3" class="o"/>')
-        extra = '<line x1="6" x2="150" y1="28" y2="28" class="cap"/>'
+        line = "M8 62 C 34 60, 52 54, 74 44 S 120 22, 148 14"
+        art = (f'<path d="{line} L148 72 L8 72 Z" class="area"/><path d="{line}" class="ln"/>'
+               '<clipPath id="wqc-over"><rect x="0" y="0" width="156" height="30"/></clipPath>'
+               f'<path d="{line}" class="ln over" clip-path="url(#wqc-over)"/>'
+               '<line x1="6" x2="150" y1="30" y2="30" class="cap"/><text x="8" y="26" class="lbl">Beds</text>'
+               '<circle cx="104" cy="30" r="3" class="hit"/>')
     elif kind == "beds":
-        hs = [40, 46, 42, 50, 44, 48, 41]
-        bars = [f'<rect x="{14 + i * 19}" y="{74 - h}" width="11" height="{h}" rx="3" class="b"/>' for i, h in enumerate(hs)]
-        extra = ('<line x1="6" x2="150" y1="30" y2="30" class="cap dim"/><line x1="6" x2="150" y1="16" y2="16" class="cap"/>'
-                 '<path d="M146 27 V19 M142 22 L146 18 L150 22" class="arr"/>')
+        line = "M8 40 C 22 30, 34 30, 46 38 S 70 48, 82 36 S 106 24, 120 34 S 140 44, 148 36"
+        art = ('<rect x="6" y="18" width="144" height="16" class="room"/>'
+               '<clipPath id="wqc-gap"><rect x="0" y="0" width="156" height="34"/></clipPath>'
+               f'<path d="{line} L148 34 L8 34 Z" class="gap" clip-path="url(#wqc-gap)"/>'
+               f'<path d="{line}" class="ln dk"/>'
+               '<line x1="6" x2="150" y1="34" y2="34" class="cap dim"/><line x1="6" x2="150" y1="18" y2="18" class="cap"/>'
+               '<text x="8" y="13" class="lbl">More beds</text><text x="146" y="55" class="lbl dim e">Fewer beds</text>'
+               '<path d="M152 31 V21 M149 24 L152 20.5 L155 24" class="arr"/>')
     else:
-        hs = [48, 54, 44, 52, 46, 50, 45]
-        for i, h in enumerate(hs):
-            bars.append(f'<rect x="{14 + i * 19}" y="{74 - h}" width="11" height="{h}" rx="3" class="g"/>')
-            bars.append(f'<rect x="{14 + i * 19}" y="{74 - round(h * .78)}" width="11" height="{round(h * .78)}" rx="3" class="b"/>')
-        extra = '<line x1="6" x2="150" y1="22" y2="22" class="cap"/>'
-    return ('<figure class="wqv" aria-hidden="true"><svg viewBox="0 0 156 80">' + extra + "".join(bars)
-            + '<line x1="6" x2="150" y1="74.5" y2="74.5" class="ax"/></svg><figcaption>Illustrative only, not simulation output</figcaption></figure>')
+        art = ('<rect x="30" y="16" width="30" height="56" rx="5" class="before"/>'
+               '<rect x="96" y="30" width="30" height="42" rx="5" class="b"/>'
+               '<path d="M66 30 C 78 30, 82 38, 90 40" class="arr"/><path d="M85 37 L90.5 40.2 L85 43" class="arr"/>'
+               '<line x1="96" x2="126" y1="16" y2="16" class="cap dim"/><rect x="96" y="16" width="30" height="14" rx="3" class="freed"/>'
+               '<text x="45" y="80" class="lbl c">Before</text><text x="111" y="80" class="lbl c">After</text>')
+    return ('<figure class="wqv" aria-hidden="true"><svg viewBox="0 0 156 84">' + art
+            + '</svg><figcaption>Illustrative only, not simulation output</figcaption></figure>')
 
 
 WELCOME_CSS = f"""
@@ -1878,7 +1892,8 @@ WELCOME_CSS = f"""
 .wqo {{ position:relative; display:flex; gap:14px; align-items:flex-start; padding:16px 18px 16px 16px; border-radius:16px;
   cursor:pointer; border:1px solid transparent; transition:background-color .2s ease, border-color .2s ease, box-shadow .25s ease; }}
 .wqo input {{ position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none; }}
-.wqo:hover {{ background:rgba(255,255,255,.65); }}
+.wqo:hover {{ background:rgba(255,255,255,.75); border-color:#E3EAF0; }}
+.wqo:hover .wqi {{ color:{TEAL_DARK}; }}
 .wqo:has(input:checked), .st-key-wl_pick:not(:has(input:checked)) .wqo-demand {{ background:#fff; border-color:#DCE6EE; box-shadow:0 14px 30px -22px rgba(11,37,69,.5); }}
 .wqo::before {{ content:""; position:absolute; left:-1px; top:18px; bottom:18px; width:3px; border-radius:3px; background:{TEAL};
   transform:scaleY(0); transition:transform .25s cubic-bezier(.2,.7,.2,1); }}
@@ -1895,10 +1910,10 @@ WELCOME_CSS = f"""
 .wqps {{ display:grid; }}
 .wqp {{ grid-area:1 / 1; visibility:hidden; opacity:0; transform:translateY(4px); padding:26px 28px 24px;
   border-radius:22px; border:1px solid #E1EAEF; background:linear-gradient(160deg, #FFFFFF 0%, #F2F8F7 100%);
-  transition:opacity .22s ease, transform .28s cubic-bezier(.2,.7,.2,1), visibility 0s linear .22s; }}
+  transition:opacity .2s ease, transform .2s cubic-bezier(.2,.7,.2,1), visibility 0s linear .2s; }}
 .st-key-wl_pick:has(#wq-demand:checked) .wqp-demand, .st-key-wl_pick:has(#wq-beds:checked) .wqp-beds,
 .st-key-wl_pick:has(#wq-flow:checked) .wqp-flow, .st-key-wl_pick:not(:has(input:checked)) .wqp-demand {{
-  visibility:visible; opacity:1; transform:none; transition:opacity .22s ease, transform .28s cubic-bezier(.2,.7,.2,1); }}
+  visibility:visible; opacity:1; transform:none; transition:opacity .2s ease, transform .2s cubic-bezier(.2,.7,.2,1); }}
 .wqd {{ margin:20px 0 0; padding:16px 0 0; border-top:1px solid #E1E9EF; display:grid; gap:12px; }}
 .wqd > div {{ display:grid; grid-template-columns:11.5em 1fr; gap:16px; align-items:baseline; }}
 .wqd dt {{ font-size:.86rem; font-weight:700; color:{TEAL_DARK}; }}
@@ -1911,13 +1926,19 @@ WELCOME_CSS = f"""
 .wqp-q {{ font-size:1.42rem; font-weight:740; color:{NAVY}; letter-spacing:-0.02em; line-height:1.25; margin:5px 0 8px; max-width:22em; }}
 .wqp p {{ font-size:1rem; color:#46586A; line-height:1.55; max-width:34em; margin:0; }}
 .wqv {{ margin:0; flex:none; width:156px; text-align:right; }}
-.wqv svg {{ width:156px; height:80px; display:block; }}
+.wqv svg {{ width:156px; height:84px; display:block; overflow:visible; }}
 .wqv .b {{ fill:{TEAL}; opacity:.85; }} .wqv .o {{ fill:#E3A55A; }}
+.wqv .area {{ fill:{TEAL}; opacity:.12; }} .wqv .ln {{ fill:none; stroke:{TEAL}; stroke-width:2; stroke-linecap:round; }}
+.wqv .ln.over {{ stroke:#D98A2B; stroke-width:2.4; }} .wqv .ln.dk {{ stroke:{NAVY_2}; }}
+.wqv .hit {{ fill:#fff; stroke:#D98A2B; stroke-width:1.5; }}
+.wqv .room {{ fill:{TEAL}; opacity:.10; }} .wqv .gap {{ fill:#E3A55A; opacity:.45; }}
+.wqv .before {{ fill:#DCE4EB; }} .wqv .freed {{ fill:none; stroke:{TEAL}; stroke-width:1.2; stroke-dasharray:3 2; }}
+.wqv .lbl {{ font:600 7.5px/1 {FONT}; fill:{NAVY}; }} .wqv .lbl.dim {{ fill:#7A8A9A; }} .wqv .lbl.c {{ text-anchor:middle; fill:#55677A; }} .wqv .lbl.e {{ text-anchor:end; }}
 .wqv .g {{ fill:none; stroke:#AFC0CE; stroke-width:1.2; stroke-dasharray:2 2; }}
 .wqv .cap {{ stroke:{NAVY}; stroke-width:1.5; stroke-dasharray:4 3; }} .wqv .cap.dim {{ stroke:#B4C1CD; }}
 .wqv .arr {{ stroke:{NAVY}; stroke-width:1.5; fill:none; stroke-linecap:round; stroke-linejoin:round; }}
 .wqv .ax {{ stroke:#C9D4DE; }}
-.wqv figcaption {{ font-size:.72rem; color:#7A8A9A; margin-top:3px; }}
+.wqv figcaption {{ font-size:.68rem; color:#8696A6; margin-top:4px; line-height:1.3; text-align:right; white-space:nowrap; }}
 .st-key-wl_go {{ min-height:3.2rem; }}
 .st-key-wl_pick [class*="st-key-wlgo_"] {{ margin-top:6px; }}
 .st-key-wl_pick [class*="st-key-wlgo_"] button {{ border-radius:999px !important; min-height:2.8rem; padding:0 22px !important; }}
