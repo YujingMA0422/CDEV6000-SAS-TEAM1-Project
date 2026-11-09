@@ -831,9 +831,12 @@ def dx_los(R):
     g = sub.groupby(["scenario", "diagnosis"], sort=False)[["bd", "admissions"]].sum().reset_index()
     g["los"] = g.bd / g.admissions
     rows = [dict(scenario=r.scenario, label=f"All {r.diagnosis}", los=float(r.los)) for r in g.itertuples()]
-    for sc in ("Baseline", "Scenario"):
-        rows.append(dict(scenario=sc, label=H.group_label(R.group) + " (target)",
-                         los=R.m("target_mean_los", sc)[0]))
+    # The target-group row only when the completed run applied a length-of-stay reduction (R.s = settings saved
+    # with the result, not the builder's current or default patient-group selection).
+    if R.s.get("reduction", 0) > 0:
+        for sc in ("Baseline", "Scenario"):
+            rows.append(dict(scenario=sc, label=H.group_label(R.group) + " (target)",
+                             los=R.m("target_mean_los", sc)[0]))
     return pd.DataFrame(rows)
 
 

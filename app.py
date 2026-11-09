@@ -1771,11 +1771,14 @@ def details_los(s):
     show(fig, "res_los")
     short, _ = M("targeted_admissions", "Scenario")
     if s["reduction"]:
-        UI.insight(f"About <b>{short:,.0f}</b> stays in {H.group_label(RV.group)} were shortened by the assumed "
+        who = "" if s["age"] == "All ages" else (f" (only patients {AGE_PHRASE[s['age']]}; the target row shows "
+                                                  "all ages in the group)")
+        UI.insight(f"About <b>{short:,.0f}</b> stays in {H.group_label(RV.group)}{who} were shortened by the assumed "
                    f"{s['reduction']}% reduction. Other groups change only through random variation. The effect "
                    "comes from your assumption, not from evidence of a real intervention.")
     else:
-        UI.insight("No length-of-stay change was assumed; differences are random variation.")
+        UI.insight("No length-of-stay change was tested, so only the three condition groups are shown; any "
+                   "differences are random variation.")
 
 
 def details_admissions(s):
