@@ -364,7 +364,7 @@ def welcome_picker():
                    f'{"<span class=wl-opt>Optional step</span>" if k == "flow" else ""}</div>'
                    f'<div class="wqp-q">{UI.esc(q)}</div></div>{UI.wl_preview(k)}</div><dl class="wqd">{rows}</dl></div>')
     with st.container(key="wl_pick"):
-        UI.md('<h2 class="wl-h2">What would you like to explore?</h2>'
+        UI.md('<h2 class="wl-h2">What Would You Like to Explore?</h2>'
               '<p class="wl-sub">Choose a planning question to see what you can test and what it can help you decide.</p>')
         c1, c2 = st.columns([0.9, 1.55], gap="medium")
         with c1:
@@ -377,15 +377,36 @@ def welcome_picker():
                               icon_position="right", on_click=open_step, args=(anchor,))
 
 
+def welcome_workflow():
+    """"One Connected Workflow": the three stages (the same wording as our presentation) and the loop back from
+    Evaluate to Simulate. Text and connectors only, so the Welcome page stays short."""
+    stages = [("01", "Understand", "What is happening?", "Explore historical demand, patterns and resource use.",
+               "Historical Overview"),
+              ("02", "Simulate", "What if things change?", "Test changes in demand, beds and patient flow.",
+               "Build a Scenario"),
+              ("03", "Evaluate", "What does it mean?",
+               "Understand the results, their planning implications, and what to test next.", "Results")]
+    cols = "".join(
+        f'<li class="wfs"><div class="wfn"><span>{n}</span><b>{name}</b></div><h3>{UI.esc(q)}</h3>'
+        f'<p>{UI.esc(d)}</p><em>{page}</em></li>' for n, name, q, d, page in stages)
+    UI.md('<section class="wf"><h2 class="wl-h2">One Connected Workflow</h2>'
+          '<p class="wl-sub">Understand hospital demand, test possible changes, and use the results to guide your next '
+          'decision — all in one place.</p>'
+          f'<ol class="wfstages3">{cols}</ol>'
+          '<div class="wfback" aria-label="After evaluating, refine and test again in Simulate">'
+          '<span class="wfarc" aria-hidden="true"></span>'
+          '<p><b>↺ Refine and test again</b> Compare saved scenarios after testing multiple options.</p></div></section>')
+
+
 def page_welcome():
-    """Hero (value), planning-question picker (decisions), simulation in plain English, the three-step path."""
+    """Product value → connected workflow → planning questions → how the simulation works (kept short)."""
     UI.md(UI.WELCOME_CSS)
     with st.container(key="wl_hero"):
         c1, c2 = st.columns([1, 1.05], gap="large", vertical_alignment="center")
         with c1:
             UI.md('<h1 class="wl-h1">See the Impact<br>Before You Act</h1>'
-                  '<p class="wl-lead">Explore how changes in hospital demand, bed capacity and patient flow could '
-                  'affect occupancy and waiting — and compare planning options before making real-world decisions.</p>')
+                  '<p class="wl-lead">Turn hospital data into planning insights, test what-if scenarios, and make more '
+                  'informed decisions.</p>')
             with st.container(key="wl_cta", horizontal=True):
                 st.button("Build a Scenario", key="wl_build", type="primary", icon=":material/arrow_forward:",
                           icon_position="right", on_click=go_to, args=("simulator",))
@@ -394,40 +415,18 @@ def page_welcome():
         with c2:
             UI.md(UI.flow_art())
 
+    welcome_workflow()
     welcome_picker()
 
     with st.container(key="wl_des"):
         a, b = st.columns([1, 1.45], gap="large", vertical_alignment="center")
         with a:
-            UI.md('<div class="wl-des"><h2 class="wl-h2">How does the simulation work?</h2>'
-                  '<p>The tool uses Discrete-Event Simulation (DES). It follows simulated patients day by day through '
-                  'one shared pool of hospital beds, so you can see how pressure builds before it happens.</p></div>')
+            UI.md('<div class="wl-des"><h2 class="wl-h2">How Does the Simulation Work?</h2>'
+                  '<p>The planner uses Discrete-Event Simulation (DES) to model how patients arrive, occupy beds, wait '
+                  'when capacity is full, and may return after discharge. This allows different planning scenarios to '
+                  'be explored before making real-world changes.</p></div>')
         with b:
             UI.md(UI.mechanism())
-
-    UI.md('<h2 class="wl-h2">Your Planning Journey</h2>'
-          '<p class="wl-sub">The steps you take in this tool, from understanding past demand to comparing plans.</p>')
-    with st.container(key="wl_path"):
-        has_result = ss.get("result") is not None
-        steps = [("Explore historical data", "See which patient groups use the most bed-days."),
-                 ("Build a scenario", "Set demand and beds, and optionally test patient-flow improvements."),
-                 ("Understand and compare results", "Read the answer, explore the evidence and compare plans.")]
-        cols = st.columns(3)
-        for i, (col, (t, d)) in enumerate(zip(cols, steps), 1):
-            with col:
-                UI.md(f'<div class="wlp-n{" cur" if i == 2 else ""}">{i}</div><div class="wlp-t">{t}</div>'
-                      f'<div class="wlp-d">{d}</div>')
-                if i == 1:
-                    st.button("Explore Historical Data", key="how_explore", type="secondary",
-                              icon=":material/arrow_forward:", icon_position="right", on_click=go_to, args=("overview",))
-                elif i == 2:
-                    st.button("Build a Scenario", key="how_simulate", type="primary", icon=":material/arrow_forward:",
-                              icon_position="right", on_click=go_to, args=("simulator",))
-                elif has_result:
-                    st.button("View Latest Results", key="how_compare", type="secondary",
-                              icon=":material/arrow_forward:", icon_position="right", on_click=go_to, args=("results",))
-                else:
-                    UI.md('<p class="wlp-none">Your results appear here after you run your first scenario.</p>')
 
 
 # =========================================================================== PAGE 2: OVERVIEW
@@ -443,8 +442,8 @@ TIPS = dict(
     avg_stay="Average number of days per hospital stay.",
     total="All Bed-days of stays that began during the historical year.",
 )
-SECTIONS = [("hospital-overview", "Hospital at a Glance"), ("explore-patient-groups", "Explore Patient Groups"),
-            ("admission-patterns", "Admission Patterns")]
+SECTIONS = [("hospital-overview", "Hospital at a Glance"), ("admission-patterns", "Admission Patterns"),
+            ("explore-patient-groups", "Explore Patient Groups")]
 # Kept for the Results redesign: modelled busy-day references per condition (see diagnosis_capacity.py).
 REF_TIP_LINE = ("Modelled with the unchanged simulation: only this condition's admissions and their readmissions, "
                 "unlimited beds, no changes, 120 days × 3 runs; the 95th-percentile daily occupancy.")
@@ -486,7 +485,7 @@ def page_overview():
     hosp = H.page_measures()
     UI.md(UI.section_nav(SECTIONS))
     UI.md('<div class="ovhead"><h1>Understand Hospital Demand</h1>'
-          '<p>Explore hospital activity, discover high-demand patient groups, and understand when demand is highest.</p>'
+          '<p>Explore hospital activity, understand when demand is highest, and discover high-demand patient groups.</p>'
           + UI.period_strip("Historical Data Period", "1 July 2011 – 30 June 2012",
                             "Initial admissions during this period, with readmissions tracked for up to 60 days after "
                             "discharge.")
@@ -509,8 +508,72 @@ def page_overview():
         unsafe_allow_html=True)
     UI.md(UI.total_bar(hosp["init_bd"], hosp["ret_bd"]))
 
-    # ================================================================ 02 Explore Patient Groups
-    UI.qhead(2, "Explore Patient Groups", anchor="explore-patient-groups")
+    # ================================================================ 02 How Does Admission Demand Change?
+    UI.qhead(2, "How Does Admission Demand Change?", anchor="admission-patterns")
+    c1, c2, _ = st.columns([1.6, 1, 1.4], vertical_alignment="bottom")
+    seg = st.segmented_control if hasattr(st, "segmented_control") else st.radio
+    seg_kw = {} if hasattr(st, "segmented_control") else {"horizontal": True}
+    with c1:
+        source = bind("ov_source", seg, "Admissions", store="ui", options=list(H.SOURCES),
+                      format_func=H.SOURCES.get, **seg_kw) or "total"
+    with c2:
+        view = bind("ov_view", seg, "View", store="ui", options=["Monthly", "By Weekday"], **seg_kw) or "Monthly"
+    ins = H.monthly_pattern(source) if view == "Monthly" else H.weekday_pattern_v2(source)
+    UI.md(UI.time_insight(ins, "Highest Month" if view == "Monthly" else "Highest Weekday",
+                          "Lowest Month" if view == "Monthly" else "Lowest Weekday"))
+    if view == "Monthly":
+        df = H.monthly_series(source)
+        full = df[~df.incomplete]
+        ihi, ilo = full.per_day.idxmax(), full.per_day.idxmin()
+        colors = [UI.WARM if i == ihi else UI.TEAL if i == ilo else UI.HIST for i in df.index]
+        sizes = [13 if i in (ihi, ilo) else 9 for i in df.index]
+        symbols = ["circle-open" if inc else "circle" for inc in df.incomplete]
+        tag = ["Highest month · " if i == ihi else "Lowest month · " if i == ilo else "" for i in df.index]
+        fig = go.Figure(go.Scatter(
+            x=df.label, y=df.per_day, mode="lines+markers+text", line=dict(color="#9DB3C9", width=2.5),
+            marker=dict(size=sizes, color=colors, symbol=symbols, line=dict(width=2, color=colors)),
+            text=[f"{v:,.0f}" for v in df.per_day], textposition="top center",
+            textfont=dict(size=[14 if i in (ihi, ilo) else 12 for i in df.index],
+                          color=[UI.WARM_DARK if i == ihi else UI.TEAL_DARK if i == ilo else UI.MUTED for i in df.index]),
+            customdata=np.stack([df["count"], df.incomplete.map({True: " · incomplete month", False: ""}), tag], axis=1),
+            hovertemplate="<b>%{x}</b><br>%{customdata[2]}%{y:,.0f} per day · %{customdata[0]:,} in the month"
+                          "%{customdata[1]}<extra></extra>"))
+        UI.style_fig(fig, 340, f"{H.SOURCES[source]} per Day, by Month", legend=False)
+        fig.update_yaxes(range=[0, df.per_day.max() * 1.22], gridcolor="#EEF2F6", tickformat=",")
+        show(fig, f"ov_monthly_{source}")
+        _chart_note(H.chart_note(source, view))
+    else:
+        wd = H.weekday_series(source)
+        ihi, ilo = wd.per_day.idxmax(), wd.per_day.idxmin()
+        fig = go.Figure(go.Bar(
+            x=[H.WEEKDAY_FULL[w] for w in wd.weekday], y=wd.per_day,
+            marker_color=[UI.WARM if i == ihi else UI.TEAL if i == ilo else "#B5C4D3" for i in wd.index],
+            text=[f"{v:,.0f}" for v in wd.per_day], textposition="outside", cliponaxis=False,
+            textfont=dict(size=13, color=UI.INK),
+            customdata=["Highest · " if i == ihi else "Lowest · " if i == ilo else "" for i in wd.index],
+            hovertemplate="%{x}: %{customdata}%{y:,.0f} per day<extra></extra>"))
+        UI.style_fig(fig, 340, f"{H.SOURCES[source]} per Day, by Weekday", legend=False)
+        fig.update_layout(bargap=0.35)
+        fig.update_yaxes(range=[0, wd.per_day.max() * 1.2], gridcolor="#EEF2F6", tickformat=",")
+        show(fig, f"ov_weekday_{source}")
+        _chart_note(H.chart_note(source, view))
+    with st.expander("Month × Weekday Detail"):
+        ylab, z = H.month_weekday_observed(source)
+        flat = [v for row in z for v in row]
+        unit = f"Average {H.SOURCES[source]} per Day"
+        UI.md(UI.heat_legend(unit, min(flat), max(flat)))
+        fig = go.Figure(go.Heatmap(z=z, x=[H.WEEKDAY_FULL[w] for w in H.WEEKDAYS], y=ylab, colorscale=UI.HEAT_SEQ,
+                                   zmin=0, zmax=max(flat), showscale=False, xgap=2, ygap=2,
+                                   hovertemplate="%{y} · %{x}: %{z:,.0f} per day<extra></extra>"))
+        UI.style_fig(fig, 400, legend=False)
+        fig.update_yaxes(autorange="reversed", gridcolor="rgba(0,0,0,0)")
+        fig.update_xaxes(side="top")
+        show(fig, f"ov_heat_{source}")
+        st.caption("Hover a cell for its value."
+                   + (" July–August 2011 readmission records are incomplete." if source != "initial" else ""))
+
+    # ================================================================ 03 Explore Patient Groups
+    UI.qhead(3, "Explore Patient Groups", anchor="explore-patient-groups")
     if not ss.get("ex_init"):                       # start from the group already in the scenario
         ss.ui["ex_dx"], ss.ui["ex_sev"], ss.ex_init = ss.cfg["diagnosis"], int(ss.cfg["severity"]), True
     dx, sev = ss.ui.get("ex_dx"), ss.ui.get("ex_sev")
@@ -604,70 +667,6 @@ def page_overview():
                       + UI.insight_line("Group Insight", H.group_insight_v2(dx, sev, age, f"{cond_label(dx)} Severity {sev}")))
     grp = f"{dx}|{sev}" if dx and sev else None
 
-    # ================================================================ 03 How Does Admission Demand Change?
-    UI.qhead(3, "How Does Admission Demand Change?", anchor="admission-patterns")
-    c1, c2, _ = st.columns([1.6, 1, 1.4], vertical_alignment="bottom")
-    seg = st.segmented_control if hasattr(st, "segmented_control") else st.radio
-    seg_kw = {} if hasattr(st, "segmented_control") else {"horizontal": True}
-    with c1:
-        source = bind("ov_source", seg, "Admissions", store="ui", options=list(H.SOURCES),
-                      format_func=H.SOURCES.get, **seg_kw) or "total"
-    with c2:
-        view = bind("ov_view", seg, "View", store="ui", options=["Monthly", "By Weekday"], **seg_kw) or "Monthly"
-    ins = H.monthly_pattern(source) if view == "Monthly" else H.weekday_pattern_v2(source)
-    UI.md(UI.time_insight(ins, "Highest Month" if view == "Monthly" else "Highest Weekday",
-                          "Lowest Month" if view == "Monthly" else "Lowest Weekday"))
-    if view == "Monthly":
-        df = H.monthly_series(source)
-        full = df[~df.incomplete]
-        ihi, ilo = full.per_day.idxmax(), full.per_day.idxmin()
-        colors = [UI.WARM if i == ihi else UI.TEAL if i == ilo else UI.HIST for i in df.index]
-        sizes = [13 if i in (ihi, ilo) else 9 for i in df.index]
-        symbols = ["circle-open" if inc else "circle" for inc in df.incomplete]
-        tag = ["Highest month · " if i == ihi else "Lowest month · " if i == ilo else "" for i in df.index]
-        fig = go.Figure(go.Scatter(
-            x=df.label, y=df.per_day, mode="lines+markers+text", line=dict(color="#9DB3C9", width=2.5),
-            marker=dict(size=sizes, color=colors, symbol=symbols, line=dict(width=2, color=colors)),
-            text=[f"{v:,.0f}" for v in df.per_day], textposition="top center",
-            textfont=dict(size=[14 if i in (ihi, ilo) else 12 for i in df.index],
-                          color=[UI.WARM_DARK if i == ihi else UI.TEAL_DARK if i == ilo else UI.MUTED for i in df.index]),
-            customdata=np.stack([df["count"], df.incomplete.map({True: " · incomplete month", False: ""}), tag], axis=1),
-            hovertemplate="<b>%{x}</b><br>%{customdata[2]}%{y:,.0f} per day · %{customdata[0]:,} in the month"
-                          "%{customdata[1]}<extra></extra>"))
-        UI.style_fig(fig, 340, f"{H.SOURCES[source]} per Day, by Month", legend=False)
-        fig.update_yaxes(range=[0, df.per_day.max() * 1.22], gridcolor="#EEF2F6", tickformat=",")
-        show(fig, f"ov_monthly_{source}")
-        _chart_note(H.chart_note(source, view))
-    else:
-        wd = H.weekday_series(source)
-        ihi, ilo = wd.per_day.idxmax(), wd.per_day.idxmin()
-        fig = go.Figure(go.Bar(
-            x=[H.WEEKDAY_FULL[w] for w in wd.weekday], y=wd.per_day,
-            marker_color=[UI.WARM if i == ihi else UI.TEAL if i == ilo else "#B5C4D3" for i in wd.index],
-            text=[f"{v:,.0f}" for v in wd.per_day], textposition="outside", cliponaxis=False,
-            textfont=dict(size=13, color=UI.INK),
-            customdata=["Highest · " if i == ihi else "Lowest · " if i == ilo else "" for i in wd.index],
-            hovertemplate="%{x}: %{customdata}%{y:,.0f} per day<extra></extra>"))
-        UI.style_fig(fig, 340, f"{H.SOURCES[source]} per Day, by Weekday", legend=False)
-        fig.update_layout(bargap=0.35)
-        fig.update_yaxes(range=[0, wd.per_day.max() * 1.2], gridcolor="#EEF2F6", tickformat=",")
-        show(fig, f"ov_weekday_{source}")
-        _chart_note(H.chart_note(source, view))
-    with st.expander("Month × Weekday Detail"):
-        ylab, z = H.month_weekday_observed(source)
-        flat = [v for row in z for v in row]
-        unit = f"Average {H.SOURCES[source]} per Day"
-        UI.md(UI.heat_legend(unit, min(flat), max(flat)))
-        fig = go.Figure(go.Heatmap(z=z, x=[H.WEEKDAY_FULL[w] for w in H.WEEKDAYS], y=ylab, colorscale=UI.HEAT_SEQ,
-                                   zmin=0, zmax=max(flat), showscale=False, xgap=2, ygap=2,
-                                   hovertemplate="%{y} · %{x}: %{z:,.0f} per day<extra></extra>"))
-        UI.style_fig(fig, 400, legend=False)
-        fig.update_yaxes(autorange="reversed", gridcolor="rgba(0,0,0,0)")
-        fig.update_xaxes(side="top")
-        show(fig, f"ov_heat_{source}")
-        st.caption("Hover a cell for its value."
-                   + (" July–August 2011 readmission records are incomplete." if source != "initial" else ""))
-
     # ================================================================ simple end-of-page action
     def _to_simulator():
         """Prefill the most recently explored group (never runs anything; demand pattern is chosen in the simulator)."""
@@ -683,11 +682,6 @@ def page_overview():
         UI.md('<div class="ctaq">Ready to explore how changes could affect hospital capacity?</div>')
         st.button("Build a Scenario", type="primary", key="ov_build", icon=":material/arrow_forward:",
                   icon_position="right", on_click=_to_simulator)
-    if ss.ui.get("ex_dx") and ss.ui.get("ex_sev"):
-        age_ = ss.ui.get("ov_age") or "All ages"
-        UI.md(f'<p class="ctanote">Your scenario will use {UI.esc(group_name(ss.ui["ex_dx"], ss.ui["ex_sev"]))}'
-              f'{"" if age_ == "All ages" else " patients " + AGE_PHRASE.get(age_, "")}'
-              ' as the target group for optional patient-flow improvements. Nothing runs until you choose to.</p>')
 
 
 def _chart_note(text):

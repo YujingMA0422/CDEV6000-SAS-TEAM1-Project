@@ -1755,10 +1755,10 @@ WL_ICONS = {
 
 def mechanism():
     """What the simulation recreates, in plain English (static; mirrors the hero's flow motif)."""
-    items = [("arrive", "Patients arrive", "Admissions arrive day by day, following historical patterns."),
-             ("stay", "They stay in a bed", "Each stay lasts a number of days drawn from past records."),
-             ("wait", "They wait if beds are full", "When every bed is taken, new requests queue for the next free bed."),
-             ("return", "Some come back", "Some patients are readmitted after discharge and need a bed again.")]
+    items = [("arrive", "Patients arrive", "Day by day, following historical patterns."),
+             ("stay", "Stay in a bed", "For a length of stay drawn from past records."),
+             ("wait", "Wait if beds are full", "Queue for the next free bed."),
+             ("return", "Some return after discharge", "And need a bed again.")]
     return ('<ol class="wl-mech">' + "".join(
         f'<li class="mi"><span class="mn">{WL_ICONS[k]}</span><span class="ml">{esc(t)}</span>'
         f'<span class="md">{esc(d)}</span></li>' for k, t, d in items) + "</ol>")
@@ -1809,9 +1809,9 @@ WELCOME_CSS = f"""
 .wl-q {{ color:#fff; font-size:1.05rem; font-weight:600; line-height:1.45; max-width:30em; margin:0 0 8px;
   padding-left:14px; border-left:3px solid #3FC1B0; }}
 .st-key-wl_cta {{ margin-top:14px; gap:10px; flex-wrap:wrap; }}
-.st-key-wl_cta button {{ border-radius:999px !important; min-height:2.9rem; padding:0 22px !important;
+.st-key-wl_cta button {{ border-radius:999px !important; min-height:2.75rem; padding:0 20px !important;
   transition:background-color .2s ease, color .2s ease, transform .2s ease; }}
-.st-key-wl_cta button p {{ font-size:1rem !important; font-weight:650 !important; white-space:nowrap; }}
+.st-key-wl_cta button p {{ font-size:.96rem !important; font-weight:650 !important; white-space:nowrap; }}
 .st-key-wl_cta [data-testid="stBaseButton-primary"], .st-key-wl_cta button[kind="primary"] {{
   background:#fff !important; color:{NAVY} !important; border:none !important; }}
 .st-key-wl_cta [data-testid="stBaseButton-primary"]:hover {{ background:{TEAL_LIGHT} !important; transform:translateY(-1px); }}
@@ -1819,6 +1819,17 @@ WELCOME_CSS = f"""
   color:#D7E2EC !important; background:transparent !important; border:1px solid rgba(215,226,236,.35) !important; }}
 .st-key-wl_cta [data-testid="stBaseButton-tertiary"]:hover {{ color:#fff !important; border-color:#fff !important; }}
 .st-key-wl_cta button:focus-visible {{ outline:2px solid #3FC1B0 !important; outline-offset:3px; }}
+.st-key-wl_start_cta {{ margin-top:14px; gap:10px; flex-wrap:wrap; }}
+.st-key-wl_start_cta button {{ border-radius:999px !important; min-height:2.9rem; padding:0 22px !important;
+  transition:background-color .2s ease, color .2s ease, transform .2s ease; }}
+.st-key-wl_start_cta button p {{ font-size:1rem !important; font-weight:650 !important; white-space:nowrap; }}
+.st-key-wl_start_cta [data-testid="stBaseButton-primary"], .st-key-wl_start_cta button[kind="primary"] {{
+  background:#fff !important; color:{NAVY} !important; border:none !important; }}
+.st-key-wl_start_cta [data-testid="stBaseButton-primary"]:hover {{ background:{TEAL_LIGHT} !important; transform:translateY(-1px); }}
+.st-key-wl_start_cta [data-testid="stBaseButton-tertiary"], .st-key-wl_start_cta button[kind="tertiary"] {{
+  color:#D7E2EC !important; background:transparent !important; border:1px solid rgba(215,226,236,.35) !important; }}
+.st-key-wl_start_cta [data-testid="stBaseButton-tertiary"]:hover {{ color:#fff !important; border-color:#fff !important; }}
+.st-key-wl_start_cta button:focus-visible {{ outline:2px solid #3FC1B0 !important; outline-offset:3px; }}
 /* load sequence: one orchestrated moment */
 @keyframes wlRise {{ from {{ opacity:0; transform:translateY(14px); }} to {{ opacity:1; transform:none; }} }}
 @keyframes wlFade {{ from {{ opacity:0; }} to {{ opacity:1; }} }}
@@ -1959,6 +1970,42 @@ ol.wl-mech {{ list-style:none; margin:0; padding:0; }}
 .wl-mech .md {{ font-size:.86rem; color:#55677A; line-height:1.45; max-width:13em; }}
 .st-key-wl_des {{ background:radial-gradient(700px 260px at 100% 0%, rgba(14,138,126,.08), rgba(14,138,126,0) 70%), #FFFFFF; }}
 /* responsive */
+/* ---- v5.7 One Connected Workflow (text and connectors only) ---- */
+.wf {{ margin:0 0 3.4rem; padding:2.6rem 3rem 2.2rem; border-radius:28px;
+  background:linear-gradient(180deg, #EAF2F5 0%, #F4F8FA 75%, rgba(244,248,250,0) 100%); }}
+.wf .wl-sub {{ margin-bottom:2rem; }}
+.wfstages3 {{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:32px; }}
+.wfs {{ position:relative; display:flex; flex-direction:column; }}
+ol.wfstages3 > li.wfs {{ margin:0 !important; padding:0 !important; }}   /* Streamlit indents markdown list items */
+@supports (grid-template-rows: subgrid) {{
+  .wfstages3 {{ grid-template-rows:auto auto 1fr auto; row-gap:0; }}
+  .wfs {{ display:grid; grid-row:span 4; grid-template-rows:subgrid; }} }}
+.wfs:not(:last-child)::after {{ content:""; position:absolute; top:16px; left:44px; right:-24px; height:2px; border-radius:2px;
+  background:linear-gradient(90deg, {TEAL}, rgba(14,138,126,.18)); }}
+.wfn {{ display:flex; flex-direction:column; gap:12px; margin-bottom:6px; }}
+.wfn span {{ width:34px; height:34px; border-radius:50%; background:#fff; border:1.5px solid {TEAL}; color:{TEAL_DARK};
+  font-size:.8rem; font-weight:750; display:flex; align-items:center; justify-content:center;
+  transition:background-color .25s ease, color .25s ease; }}
+.wfs:hover .wfn span {{ background:{TEAL}; color:#fff; }}
+.wfn b {{ font-size:.9rem; font-weight:700; color:{TEAL_DARK}; }}
+.wfs h3 {{ font-size:1.3rem !important; font-weight:740 !important; color:{NAVY} !important; letter-spacing:-0.02em;
+  line-height:1.25 !important; margin:0 0 .4rem !important; padding:0 !important; }}
+.wfs p {{ font-size:.98rem; color:#46586A; line-height:1.55; margin:0 0 .7rem; max-width:24em; }}
+.wfs em {{ font-style:normal; align-self:start; justify-self:start; width:fit-content; font-size:.76rem; font-weight:620; color:{NAVY_2}; background:#fff;
+  border:1px solid #DCE5EC; border-radius:999px; padding:3px 10px; }}
+/* the loop: an arc from Evaluate back to Simulate */
+.wfback {{ position:relative; margin:14px 0 0 calc((100% - 64px) / 3 + 32px + 17px); width:calc((100% - 64px) / 3 + 32px); }}
+.wfarc {{ display:block; height:22px; border:2px dashed rgba(14,138,126,.55); border-top:none; border-radius:0 0 18px 18px; }}
+.wfarc::before {{ content:""; position:absolute; left:-5px; top:-6px; border:6px solid transparent;
+  border-bottom:8px solid rgba(14,138,126,.75); border-top:none; }}
+.wfback p {{ margin:10px 0 0 50%; transform:translateX(-50%); width:max-content; text-align:center; font-size:.9rem; color:#46586A; }}
+.wfback p b {{ color:{TEAL_DARK}; font-weight:700; margin-right:6px; }}
+@media (max-width: 1000px) {{
+  .wf {{ padding:2.2rem 1.4rem 1.8rem; }}
+  .wfstages3 {{ grid-template-columns:1fr; gap:24px; }} .wfs::after {{ display:none; }}
+  .wfback {{ margin:18px 0 0; width:auto; }} .wfarc {{ display:none; }}
+  .wfback p {{ text-align:left; margin-left:0; transform:none; width:auto; }} }}
+@media (prefers-reduced-motion: reduce) {{ .wfn span {{ transition:none !important; }} }}
 @media (max-width: 1100px) {{ .st-key-wl_hero {{ padding:40px 32px 34px; }} .st-key-wl_qs [data-testid="stColumn"] {{ padding:4px 18px 6px; }} }}
 @media (max-width: 760px) {{
   .st-key-wl_hero {{ padding:32px 22px 26px; border-radius:22px; }}
